@@ -45,3 +45,8 @@ Thumbs.db
 
 /playwright-report/
 /test-results/
+
+# Backend (server/)
+/server/node_modules
+/server/dist
+/server/.env
