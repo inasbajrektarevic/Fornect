@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 
 import './types';
@@ -13,6 +14,11 @@ export function buildApp() {
   const app = Fastify({ logger: true });
 
   app.register(cors, { origin: true });
+
+  // global: false — plugin se ne primjenjuje automatski na sve rute,
+  // samo na one koje eksplicitno postave `config.rateLimit` (vidi
+  // POST /api/v1/devices/register).
+  app.register(rateLimit, { global: false });
 
   app.get('/health', async () => ({ ok: true }));
 
