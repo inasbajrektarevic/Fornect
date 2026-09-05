@@ -17,5 +17,9 @@ COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 COPY scripts ./scripts
 
+# Ne pokreći kao root u produkciji — node:22-alpine već ima 'node'
+# korisnika (uid 1000) spreman za ovo, bez dodatnog podešavanja.
+USER node
+
 EXPOSE 3000
 CMD ["node", "dist/server.js"]
