@@ -6,6 +6,7 @@ import { authenticateAccount } from './plugins/authenticate-account';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { deviceRoutes } from './routes/devices';
+import { healthRoutes } from './routes/health';
 import { hubRoutes } from './routes/hub';
 import { networkDeviceRoutes } from './routes/network-devices';
 
@@ -14,7 +15,11 @@ export function buildApp() {
 
   app.register(cors, { origin: true });
 
+  // Plain liveness ping (proces je živ) — bez provjere baze.
   app.get('/health', async () => ({ ok: true }));
+
+  // Readiness za Dokploy health check — provjerava i konekciju na bazu.
+  app.register(healthRoutes, { prefix: '/api/v1' });
 
   // Uređaji (Orange Pi agent) — Bearer token autentifikacija po ruti.
   app.register(deviceRoutes, { prefix: '/api/v1/devices' });
