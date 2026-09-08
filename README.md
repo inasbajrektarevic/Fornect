@@ -175,3 +175,12 @@ heartbeat uređaja i šalje push — to je van opsega POC faze.
   nezavisno od njega.
 - **Playwright** za e2e — testira stvarno ponašanje u browseru,
   uključujući mobilne širine i veličinu dodirnih meta.
+
+---
+
+## Deploy (produkcija)
+
+Frontend se deployuje kao nginx-servirana statička slika (root
+`Dockerfile`), odvojeno od backend servisa (`server/Dockerfile`).
+Detalji, dva razmatrana pristupa i preporuka — vidi
+[`deploy/README.md`](deploy/README.md).

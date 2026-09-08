@@ -1,0 +1,51 @@
+# Servira build-ovani Angular frontend i proxy-ja /api/* ka backend
+# servisu. BACKEND_HOST/BACKEND_PORT supstituiše nginx-ov ulazni
+# skript (docker-entrypoint.d/20-envsubst-on-templates.sh, ugrađen u
+# zvanični nginx image) pri startu kontejnera — envsubst zamjenjuje
+# SAMO varijable koje postoje u environment-u kontejnera, pa nginx-ove
+# ugrađene varijable (npr. $host, $remote_addr) ostaju netaknute.
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Content-hashed build artefakti (Angular production build sa
+    # outputHashing: "all") se mogu keširati agresivno i trajno —
+    # promjena sadržaja uvijek znači i novo ime fajla.
+    location ~* \.(?:js|css|woff2?|ttf|svg|png|jpg|jpeg|gif|ico)$ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # index.html se NIKAD ne kešira — mora se svaki put iznova
+    # provjeriti da bi korisnik dobio najnoviji build (inače bi
+    # stari index.html i dalje referencirao obrisane hash-ovane
+    # chunk-ove nakon deploya nove verzije).
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+        try_files $uri =404;
+    }
+
+    # Angular SPA — svaka nepoznata putanja (npr. /dashboard nakon
+    # ručnog reload-a) pada na index.html da Angular router preuzme
+    # rutiranje na klijentu.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Sve /api/* zahtjeve prosljeđuje backend Fastify servisu. Host i
+    # port dolaze iz environment varijabli, ne hardkodirano — u
+    # Dokploy-u BACKEND_HOST je interno ime backend servisa na istoj
+    # mreži, BACKEND_PORT je backend-ov PORT (server/.env).
+    location /api/ {
+        proxy_pass http://${BACKEND_HOST}:${BACKEND_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
