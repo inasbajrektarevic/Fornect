@@ -26,37 +26,51 @@ interface ConfigAckBody {
 }
 
 export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
-  fastify.post<{ Body: RegisterBody }>('/register', async (request, reply) => {
-    const { name, kind = 'home', mode = 'home', capacity } = request.body ?? {};
+  fastify.post<{ Body: RegisterBody }>(
+    '/register',
+    {
+      // Ruta je namjerno bez auth-a (uređaj još nema token), pa je
+      // rate limit po IP-u osnovna zaštita dok se mrežni nivo zaštite
+      // (VPN/allowlist) ne postavi odvojeno na VPS-u.
+      config: {
+        rateLimit: {
+          max: 10,
+          timeWindow: '1 hour',
+        },
+      },
+    },
+    async (request, reply) => {
+      const { name, kind = 'home', mode = 'home', capacity } = request.body ?? {};
 
-    if (!name) {
-      return reply.code(400).send({ error: 'name je obavezan.' });
-    }
+      if (!name) {
+        return reply.code(400).send({ error: 'name je obavezan.' });
+      }
 
-    const token = generateDeviceToken();
-    const tokenHash = hashDeviceToken(token);
+      const token = generateDeviceToken();
+      const tokenHash = hashDeviceToken(token);
 
-    const { rows } = await pool.query<DeviceRow>(
-      `INSERT INTO devices (name, token_hash, kind, mode, capacity)
+      const { rows } = await pool.query<DeviceRow>(
+        `INSERT INTO devices (name, token_hash, kind, mode, capacity)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [name, tokenHash, kind, mode, capacity ?? null],
-    );
+        [name, tokenHash, kind, mode, capacity ?? null],
+      );
 
-    const device = rows[0]!;
+      const device = rows[0]!;
 
-    // Token se vraća SAMO ovdje, jednom — uređaj ga mora sačuvati,
-    // jer se ne može ponovo pročitati (u bazi je samo hash).
-    return reply.code(201).send({
-      id: device.id,
-      name: device.name,
-      kind: device.kind,
-      mode: device.mode,
-      capacity: device.capacity,
-      token,
-      created_at: device.created_at,
-    });
-  });
+      // Token se vraća SAMO ovdje, jednom — uređaj ga mora sačuvati,
+      // jer se ne može ponovo pročitati (u bazi je samo hash).
+      return reply.code(201).send({
+        id: device.id,
+        name: device.name,
+        kind: device.kind,
+        mode: device.mode,
+        capacity: device.capacity,
+        token,
+        created_at: device.created_at,
+      });
+    },
+  );
 
   fastify.post<{ Params: { id: string }; Body: HeartbeatBody }>(
     '/:id/heartbeat',
