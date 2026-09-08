@@ -1,4 +1,4 @@
-﻿import { Component, inject } from '@angular/core';
+﻿import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 
@@ -27,7 +27,11 @@ export class Login {
   email = '';
   password = '';
   rememberMe = false;
-  errorMessageKey = '';
+
+  // Signal, ne obično polje: app je zoneless (nema zone.js), pa
+  // promjena običnog polja NAKON await-a (ovdje: rezultat prijave)
+  // ne pokreće re-render sama od sebe — signal pisanje uvijek pokreće.
+  readonly errorMessageKey = signal('');
 
   get currentLanguage(): AppLanguage {
     return this.languageService.currentLanguage();
@@ -38,12 +42,12 @@ export class Login {
   }
 
   async signIn(): Promise<void> {
-    this.errorMessageKey = '';
+    this.errorMessageKey.set('');
 
     const success = await this.authService.login(this.email, this.password, this.rememberMe);
 
     if (!success) {
-      this.errorMessageKey = 'login.invalidCredentials';
+      this.errorMessageKey.set('login.invalidCredentials');
       return;
     }
 

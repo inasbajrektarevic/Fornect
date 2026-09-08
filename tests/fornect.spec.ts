@@ -1,43 +1,246 @@
-﻿import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 
-async function login(page: Page): Promise<void> {
-  await page.goto('/login');
+// ---------------------------------------------------------------
+// Backend je sad stvaran (Fastify + PostgreSQL), ne localStorage
+// mock. Svaki test dobija SVOJ svježe registrovan nalog (jedinstven
+// email po pozivu), pa testovi ne dijele stanje niti moraju čistiti
+// bazu između pokretanja — nema kolizije čak ni ako se cijeli suite
+// pokrene više puta zaredom protiv iste baze.
+// ---------------------------------------------------------------
 
-  await page.getByLabel('Email address').fill('test@fornect.com');
-  await page.getByLabel('Password').fill('test123');
+const PASSWORD = 'Fornect2026!';
 
-  await page.getByRole('button', { name: 'Sign in' }).click();
+function uniqueEmail(tag: string): string {
+  return `${tag}-${Date.now()}-${Math.floor(Math.random() * 1e8)}@fornect.test`;
+}
+
+interface LoginApiResponse {
+  token: string;
+  account: { id: string; name: string; email: string };
+}
+
+/** Registruje nalog direktno preko API-ja (bez UI-ja) — koristi se
+ * kad test treba samo da nalog POSTOJI da bi ga UI login testirao.
+ * Odmah postavlja i jezičku preferencu (en) za taj nalog, da UI
+ * nakon login-a ne padne nazad na podrazumijevani bosanski. */
+async function registerAccount(page: Page, email: string, name = 'Test User'): Promise<void> {
+  const response = await page.request.post('/api/v1/auth/register', {
+    data: { name, email, password: PASSWORD },
+  });
+
+  const account: { id: string } = await response.json();
+
+  await page.evaluate((accountId) => {
+    localStorage.setItem(
+      `fornect-account-preferences-${accountId}`,
+      JSON.stringify({ language: 'en' }),
+    );
+  }, account.id);
+}
+
+async function apiLogin(page: Page, email: string): Promise<LoginApiResponse> {
+  const response = await page.request.post('/api/v1/auth/login', {
+    data: { email, password: PASSWORD },
+  });
+
+  return response.json();
+}
+
+const WEEK_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DEFAULT_SELECTED_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+function schedule(
+  enabled: boolean,
+  startHour: string,
+  startMinute: string,
+  endHour: string,
+  endMinute: string,
+) {
+  return {
+    enabled,
+    mode: 'sameEveryDay',
+    startHour,
+    startMinute,
+    endHour,
+    endMinute,
+    days: WEEK_ORDER.map((label) => ({
+      label,
+      selected: DEFAULT_SELECTED_DAYS.includes(label),
+      startHour,
+      startMinute,
+      endHour,
+      endMinute,
+    })),
+  };
+}
+
+// Isti 4 demo uređaja kao u staroj mock verziji (ista imena, profili,
+// nivoi zaštite, pairing stanja i rasporedi) — samo se sad stvarno
+// kreiraju preko backend API-ja, sa pravim UUID-ovima umjesto
+// hardkodiranih string ID-ova poput 'amar-iphone'.
+const DEMO_DEVICES = [
+  {
+    key: 'iphone' as const,
+    name: "Amar's iPhone",
+    macAddress: '02:00:00:00:01:01',
+    type: 'phone',
+    profile: 'Child',
+    protectionLevel: 'full',
+    pairingState: 'paired',
+    useFullProtection: true,
+    online: true,
+    schedule: schedule(true, '21', '00', '07', '00'),
+  },
+  {
+    key: 'tv' as const,
+    name: 'Living room TV',
+    macAddress: '02:00:00:00:01:02',
+    type: 'tv',
+    profile: 'Adult',
+    protectionLevel: 'standard',
+    pairingState: 'unpaired',
+    useFullProtection: false,
+    online: true,
+    schedule: schedule(false, '22', '00', '07', '00'),
+  },
+  {
+    key: 'playstation' as const,
+    name: 'PlayStation 5',
+    macAddress: '02:00:00:00:01:03',
+    type: 'console',
+    profile: 'Teen',
+    protectionLevel: 'standard',
+    pairingState: 'unpaired',
+    useFullProtection: false,
+    // Offline po dizajnu — test 21 provjerava obavještenje o
+    // uređaju koji je napustio mrežu.
+    online: false,
+    schedule: schedule(true, '22', '00', '08', '00'),
+  },
+  {
+    key: 'unknown' as const,
+    name: 'Unknown device',
+    macAddress: '02:00:00:00:01:04',
+    type: 'unknown',
+    profile: null as string | null,
+    protectionLevel: 'needs-setup',
+    pairingState: 'unpaired',
+    useFullProtection: false,
+    online: true,
+    schedule: schedule(false, '21', '00', '07', '00'),
+  },
+];
+
+type DeviceKey = (typeof DEMO_DEVICES)[number]['key'];
+
+interface SeededAccount {
+  email: string;
+  accountId: string;
+  /** Pravi UUID svakog demo uređaja, po ključu (npr. deviceIds.iphone). */
+  deviceIds: Record<DeviceKey, string>;
+}
+
+/**
+ * Registruje svjež nalog preko pravog backend-a, po potrebi kreira
+ * 4 standardna demo uređaja preko network-devices API-ja (isti kao
+ * stari mock), i upisuje sesiju u localStorage u istom obliku kakav
+ * AuthService očekuje (fornect-auth-session) — bez prolaska kroz
+ * login formu, radi brzine. Naredna navigacija (page.goto) učitava
+ * app iznova, pa AuthService/DeviceService/HubService konstruktori
+ * sinhrono pokupe ovu sesiju i učitaju uređaje sa API-ja.
+ */
+async function seedAccount(
+  page: Page,
+  options: { withDevices?: boolean } = {},
+): Promise<SeededAccount> {
+  const email = uniqueEmail('demo');
+
+  await registerAccount(page, email, 'Demo User');
+  const { token, account } = await apiLogin(page, email);
+
+  const deviceIds = {} as Record<DeviceKey, string>;
+
+  if (options.withDevices !== false) {
+    for (const spec of DEMO_DEVICES) {
+      const createResponse = await page.request.post('/api/v1/app/network-devices', {
+        headers: { Authorization: `Bearer ${token}` },
+        data: {
+          mac_address: spec.macAddress,
+          name: spec.name,
+          type: spec.type,
+          profile: spec.profile,
+          protection_level: spec.protectionLevel,
+          pairing_state: spec.pairingState,
+          use_full_protection: spec.useFullProtection,
+          schedule: spec.schedule,
+        },
+      });
+
+      const created = await createResponse.json();
+      deviceIds[spec.key] = created.id;
+
+      // 'online' nije podržan na POST-u (samo PATCH) — vidi
+      // server/src/routes/network-devices.ts CREATABLE_FIELDS.
+      if (spec.online) {
+        await page.request.patch(`/api/v1/app/network-devices/${created.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          data: { online: true },
+        });
+      }
+    }
+  }
+
+  const session = {
+    token,
+    user: {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      accountId: account.id,
+    },
+  };
+
+  await page.evaluate(
+    ({ sessionJson, accountId }) => {
+      localStorage.setItem('fornect-auth-session', sessionJson);
+      localStorage.setItem(
+        `fornect-account-preferences-${accountId}`,
+        JSON.stringify({ language: 'en' }),
+      );
+    },
+    { sessionJson: JSON.stringify(session), accountId: account.id },
+  );
+
+  return { email, accountId: account.id, deviceIds };
+}
+
+/** Ekvivalent staroj login(page) helper funkciji — ulaze već
+ * prijavljeni na dashboard, sa 4 standardna demo uređaja. */
+async function login(page: Page, options: { withDevices?: boolean } = {}): Promise<SeededAccount> {
+  const seeded = await seedAccount(page, options);
+
+  await page.goto('/dashboard');
 
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  // Router je stigao na dashboard, ali brze akcije se
-  // renderuju tek nakon prvog prolaza. Bez ovog čekanja
-  // klik odmah nakon prijave zna promašiti.
-  await expect(
-    page.getByRole('button', { name: 'Devices' })
-  ).toBeVisible();
+  // Brze akcije se renderuju tek nakon prvog prolaza. Bez ovog
+  // čekanja klik odmah nakon prijave zna promašiti.
+  await expect(page.getByRole('button', { name: 'Devices' })).toBeVisible();
+
+  return seeded;
 }
 
-// POC default jezik je bosanski, a testovi gađaju
-// engleske stringove. Jezik se zato fiksira prije
-// nego se aplikacija uopšte pokrene.
-const ENGLISH_ACCOUNTS = [
-  'anonymous',
-  'account-demo-001',
-  'account-other-999'
-];
-
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript((accounts: string[]) => {
-    for (const account of accounts) {
-      localStorage.setItem(
-        `fornect-account-preferences-${account}`,
-        JSON.stringify({ language: 'en' })
-      );
-    }
-  }, ENGLISH_ACCOUNTS);
+  // Jezik za pre-login ekrane (login/register/verify-email) — nalog
+  // za te ekrane još ne postoji, pa se koristi 'anonymous' ključ.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'fornect-account-preferences-anonymous',
+      JSON.stringify({ language: 'en' }),
+    );
+  });
 
-  // Svaki test počinje sa čistim POC stanjem.
+  // Svaki test počinje sa čistim localStorage stanjem.
   await page.goto('/login');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -47,27 +250,24 @@ test('01 - auth guard blocks dashboard without login', async ({ page }) => {
   await page.goto('/dashboard');
 
   await expect(page).toHaveURL(/\/login$/);
-  await expect(
-    page.getByRole('heading', { name: 'Welcome back' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
 });
 
 test('02 - login validates fields and creates session', async ({ page }) => {
+  const email = uniqueEmail('login');
+  await registerAccount(page, email);
+
   await page.getByRole('button', { name: 'Sign in' }).click();
 
-  await expect(
-    page.getByText('Invalid email or password.')
-  ).toBeVisible();
+  await expect(page.getByText('Invalid email or password.')).toBeVisible();
 
-  await page.getByLabel('Email address').fill('test@fornect.com');
-  await page.getByLabel('Password').fill('test123');
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
 
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(
-    page.getByRole('heading', { name: 'Your network is protected' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your network is protected' })).toBeVisible();
 
   await page.reload();
 
@@ -75,7 +275,7 @@ test('02 - login validates fields and creates session', async ({ page }) => {
 });
 
 test('03 - logout clears session', async ({ page }) => {
-  await login(page);
+  await login(page, { withDevices: false });
 
   await page.getByRole('button', { name: 'Logout' }).click();
 
@@ -87,7 +287,7 @@ test('03 - logout clears session', async ({ page }) => {
 });
 
 test('04 - devices are listed and open correct details', async ({ page }) => {
-  await login(page);
+  const seeded = await login(page);
 
   await page.getByRole('button', { name: 'Devices' }).click();
 
@@ -98,42 +298,34 @@ test('04 - devices are listed and open correct details', async ({ page }) => {
   await expect(page.getByText('PlayStation 5')).toBeVisible();
   await expect(page.getByText('Unknown device')).toBeVisible();
 
-  const tvCard = page
-    .locator('.device-card')
-    .filter({ hasText: 'Living room TV' });
+  const tvCard = page.locator('.device-card').filter({ hasText: 'Living room TV' });
 
   // Oznaka profila zivi na listi uredaja.
-  await expect(
-    tvCard.getByText('Adult profile')
-  ).toBeVisible();
+  await expect(tvCard.getByText('Adult profile')).toBeVisible();
 
   await tvCard.getByRole('button', { name: 'Manage' }).click();
 
-  await expect(page).toHaveURL(/\/devices\/living-room-tv$/);
+  await expect(page).toHaveURL(new RegExp(`/devices/${seeded.deviceIds.tv}$`));
 
   await expect(
-    page.getByRole('heading', { name: 'Living room TV', exact: true }).first()
+    page.getByRole('heading', { name: 'Living room TV', exact: true }).first(),
   ).toBeVisible();
 
   // Detalji uredaja isti podatak pisu punom recenicom,
   // i to na dva mjesta (header i kartica profila).
   await expect(
-    page
-      .getByText('This device uses the Adult protection profile.')
-      .first()
+    page.getByText('This device uses the Adult protection profile.').first(),
   ).toBeVisible();
 });
 
 test('05 - profile change survives refresh', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/amar-iphone');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.iphone}`);
 
   await page.getByRole('button', { name: 'Change profile' }).click();
   await page.getByRole('button', { name: 'Teen', exact: true }).click();
 
-  const teenProfileText = page
-    .getByText('This device uses the Teen protection profile.')
-    .first();
+  const teenProfileText = page.getByText('This device uses the Teen protection profile.').first();
 
   await expect(teenProfileText).toBeVisible();
 
@@ -143,8 +335,8 @@ test('05 - profile change survives refresh', async ({ page }) => {
 });
 
 test('06 - schedule saves and survives refresh', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/living-room-tv/schedule');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.tv}/schedule`);
 
   await page.locator('.slider').click();
 
@@ -157,9 +349,7 @@ test('06 - schedule saves and survives refresh', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Save schedule' }).click();
 
-  await expect(
-    page.getByText('Schedule saved successfully.')
-  ).toBeVisible();
+  await expect(page.getByText('Schedule saved successfully.')).toBeVisible();
 
   await page.reload();
 
@@ -174,109 +364,82 @@ test('06 - schedule saves and survives refresh', async ({ page }) => {
 });
 
 test('07 - emergency override survives refresh', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/amar-iphone');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.iphone}`);
 
   await page.getByRole('button', { name: '30 min' }).click();
 
-  await expect(
-    page.getByRole('heading', { name: 'Temporarily allowed' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Temporarily allowed' })).toBeVisible();
 
   await page.reload();
 
-  await expect(
-    page.getByRole('heading', { name: 'Temporarily allowed' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Temporarily allowed' })).toBeVisible();
 
   await page.getByRole('button', { name: 'End override' }).click();
 
   await page.reload();
 
-  await expect(
-    page.getByRole('heading', { name: 'Paused' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Paused' })).toBeVisible();
 });
 
 test('08 - protection pairing survives refresh', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/living-room-tv/protection');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.tv}/protection`);
 
   await page.getByRole('button', { name: 'Start pairing' }).click();
 
-  await expect(
-    page.getByText('Waiting for confirmation')
-  ).toBeVisible();
+  await expect(page.getByText('Waiting for confirmation')).toBeVisible();
 
   await page.getByRole('button', { name: 'Profile installed' }).click();
 
-  await expect(
-    page.getByText('Paired', { exact: true })
-  ).toBeVisible();
+  await expect(page.getByText('Paired', { exact: true })).toBeVisible();
 
   await page.reload();
 
-  await expect(
-    page.getByText('Paired', { exact: true })
-  ).toBeVisible();
+  await expect(page.getByText('Paired', { exact: true })).toBeVisible();
 
   await expect(
-    page.getByRole('heading', { name: 'Full Protection', exact: true }).first()
+    page.getByRole('heading', { name: 'Full Protection', exact: true }).first(),
   ).toBeVisible();
 });
 
 test('09 - unknown device setup flow works', async ({ page }) => {
-  await login(page);
+  const seeded = await login(page);
   await page.goto('/devices');
 
   await page.getByRole('button', { name: 'Set up' }).click();
 
-  await expect(page).toHaveURL(/\/devices\/unknown-device\/setup$/);
+  await expect(page).toHaveURL(new RegExp(`/devices/${seeded.deviceIds.unknown}/setup$`));
 
-  await page
-    .getByPlaceholder("e.g. Amina's tablet")
-    .fill('Test iPhone');
+  await page.getByPlaceholder("e.g. Amina's tablet").fill('Test iPhone');
 
   await page.getByRole('button', { name: /Teen/ }).click();
 
-  await page
-    .getByRole('button', { name: /Standard Protection/ })
-    .click();
+  await page.getByRole('button', { name: /Standard Protection/ }).click();
 
   await page.getByRole('button', { name: 'Finish setup' }).click();
 
-  await expect(page).toHaveURL(/\/devices\/unknown-device$/);
+  await expect(page).toHaveURL(new RegExp(`/devices/${seeded.deviceIds.unknown}$`));
 
   await expect(
-    page.getByRole('heading', { name: 'Test iPhone', exact: true }).first()
+    page.getByRole('heading', { name: 'Test iPhone', exact: true }).first(),
   ).toBeVisible();
 
   await page.getByRole('button', { name: 'Back to devices' }).click();
 
-  const newDeviceCard = page
-    .locator('.device-card')
-    .filter({ hasText: 'Test iPhone' });
+  const newDeviceCard = page.locator('.device-card').filter({ hasText: 'Test iPhone' });
 
   await expect(newDeviceCard).toBeVisible();
-  await expect(
-    newDeviceCard.getByText('Teen profile')
-  ).toBeVisible();
+  await expect(newDeviceCard.getByText('Teen profile')).toBeVisible();
 });
 
 test('10 - another account cannot see demo account devices', async ({ page }) => {
-  await login(page);
+  // Prvi (demo) nalog postoji u bazi sa svojim uređajima, ali se ne
+  // prijavljujemo na njega — samo dokazujemo da drugi nalog ne može
+  // vidjeti njegove uređaje čak i kad oni stvarno postoje.
+  await seedAccount(page);
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'fornect-auth-user',
-      JSON.stringify({
-        id: 'user-other',
-        name: 'Other User',
-        email: 'other@fornect.com',
-        accountId: 'account-other-999'
-      })
-    );
-  });
+  await login(page, { withDevices: false });
 
   await page.goto('/devices');
 
@@ -294,26 +457,20 @@ test('10 - another account cannot see demo account devices', async ({ page }) =>
 test('11 - main devices screen fits mobile width', async ({ page }) => {
   await page.setViewportSize({
     width: 390,
-    height: 844
+    height: 844,
   });
 
   await login(page);
   await page.goto('/devices');
 
   const hasHorizontalOverflow = await page.evaluate(() => {
-    return (
-      document.documentElement.scrollWidth >
-      document.documentElement.clientWidth
-    );
+    return document.documentElement.scrollWidth > document.documentElement.clientWidth;
   });
 
   expect(hasHorizontalOverflow).toBe(false);
 
-  await expect(
-    page.getByRole('heading', { name: 'Devices', exact: true })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Devices', exact: true })).toBeVisible();
 });
-
 
 test('12 - dashboard quick actions all work', async ({ page }) => {
   await login(page);
@@ -326,128 +483,90 @@ test('12 - dashboard quick actions all work', async ({ page }) => {
   await page.goto('/dashboard');
   await page.getByRole('button', { name: 'Schedules' }).click();
   await page.waitForURL(/\/schedules$/);
-  await expect(
-    page.getByRole('heading', { name: 'Schedules', exact: true })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
 
   // Protection
   await page.goto('/dashboard');
   await page.getByRole('button', { name: 'Protection' }).click();
   await page.waitForURL(/\/protection$/);
-  await expect(
-    page.getByRole('heading', { name: 'Protection', exact: true })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Protection', exact: true })).toBeVisible();
 
   // Pause internet
   await page.goto('/dashboard');
 
   await page.getByRole('button', { name: 'Pause internet' }).click();
 
-  await expect(
-    page.getByRole('button', { name: 'Resume internet' })
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume internet' })).toBeVisible();
 
-  await expect(
-    page.getByRole('heading', { name: 'Internet is paused' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Internet is paused' })).toBeVisible();
 
   // Pause state survives refresh
   await page.reload();
 
-  await expect(
-    page.getByRole('button', { name: 'Resume internet' })
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume internet' })).toBeVisible();
 
   // Resume internet
   await page.getByRole('button', { name: 'Resume internet' }).click();
 
-  await expect(
-    page.getByRole('button', { name: 'Pause internet' })
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pause internet' })).toBeVisible();
 
-  await expect(
-    page.getByRole('heading', { name: 'Your network is protected' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your network is protected' })).toBeVisible();
 });
 
 test('13 - help page is reachable from settings', async ({ page }) => {
-  await login(page);
+  await login(page, { withDevices: false });
   await page.goto('/settings');
 
-  await page
-    .getByRole('link', { name: /How can we help/ })
-    .click();
+  await page.getByRole('link', { name: /How can we help/ }).click();
 
   await expect(page).toHaveURL(/\/help$/);
 
-  await expect(
-    page.getByRole('heading', { name: 'Help & Support' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Help & Support' })).toBeVisible();
 
-  await page
-    .getByRole('button', { name: 'Send request' })
-    .click();
+  await page.getByRole('button', { name: 'Send request' }).click();
 
-  await expect(
-    page.getByText('Please enter at least 10 characters.')
-  ).toBeVisible();
+  await expect(page.getByText('Please enter at least 10 characters.')).toBeVisible();
 
-  await page
-    .getByLabel('Message')
-    .fill('My living room TV keeps going offline.');
+  await page.getByLabel('Message').fill('My living room TV keeps going offline.');
 
-  await page
-    .getByRole('button', { name: 'Send request' })
-    .click();
+  await page.getByRole('button', { name: 'Send request' }).click();
 
-  await expect(
-    page.getByText('Your support request has been received.')
-  ).toBeVisible();
+  await expect(page.getByText('Your support request has been received.')).toBeVisible();
 });
 
 test('14 - registration survives an interrupted pairing step', async ({ page }) => {
+  const email = uniqueEmail('register-flow');
+
   await page.goto('/register');
 
   await page.getByRole('button', { name: 'EN' }).click();
 
   await page.getByLabel('Full name').fill('Inas Test');
 
-  await page
-    .getByLabel('Email address')
-    .fill('inas.test@fornect.com');
+  await page.getByLabel('Email address').fill(email);
 
-  await page
-    .getByLabel('Password', { exact: true })
-    .fill('Fornect2026');
+  await page.getByLabel('Password', { exact: true }).fill('Fornect2026');
 
-  await page
-    .getByLabel('Confirm password')
-    .fill('Fornect2026');
+  await page.getByLabel('Confirm password').fill('Fornect2026');
 
-  await page
-    .getByRole('button', { name: 'Create account' })
-    .click();
+  await page.getByRole('button', { name: 'Create account' }).click();
 
   await expect(page).toHaveURL(/\/verify-email$/);
 
   await page.getByLabel('Verification code').fill('123456');
 
-  await page
-    .getByRole('button', { name: 'Verify email' })
-    .click();
+  await page.getByRole('button', { name: 'Verify email' }).click();
 
   await expect(
     page.getByRole('heading', {
-      name: 'Your account is verified'
-    })
+      name: 'Your account is verified',
+    }),
   ).toBeVisible();
 
   // Korisnik prekida flow prije pairinga uređaja.
   await page.goto('/login');
 
-  await page
-    .getByLabel('Email address')
-    .fill('inas.test@fornect.com');
+  await page.getByLabel('Email address').fill(email);
 
   await page.getByLabel('Password').fill('Fornect2026');
 
@@ -457,12 +576,10 @@ test('14 - registration survives an interrupted pairing step', async ({ page }) 
 });
 
 test('15 - content restrictions can be customized and reset', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/amar-iphone');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.iphone}`);
 
-  const card = page
-    .locator('.settings-card')
-    .filter({ hasText: 'Content restrictions' });
+  const card = page.locator('.settings-card').filter({ hasText: 'Content restrictions' });
 
   const socialMedia = card
     .locator('.restriction-item')
@@ -485,21 +602,17 @@ test('15 - content restrictions can be customized and reset', async ({ page }) =
   await expect(badge).toHaveText('Customized');
   await expect(socialMedia).not.toBeChecked();
 
-  await card
-    .getByRole('button', { name: 'Reset to profile defaults' })
-    .click();
+  await card.getByRole('button', { name: 'Reset to profile defaults' }).click();
 
   await expect(badge).toHaveText('Profile defaults');
   await expect(socialMedia).toBeChecked();
 });
 
 test('16 - profile change applies the new restriction preset', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/amar-iphone');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.iphone}`);
 
-  const card = page
-    .locator('.settings-card')
-    .filter({ hasText: 'Content restrictions' });
+  const card = page.locator('.settings-card').filter({ hasText: 'Content restrictions' });
 
   const adultContent = card
     .locator('.restriction-item')
@@ -508,45 +621,23 @@ test('16 - profile change applies the new restriction preset', async ({ page }) 
 
   await expect(adultContent).toBeChecked();
 
-  await page
-    .getByRole('button', { name: 'Change profile' })
-    .click();
+  await page.getByRole('button', { name: 'Change profile' }).click();
 
-  await page
-    .getByRole('button', { name: 'Admin', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
 
   await expect(adultContent).not.toBeChecked();
 
-  await expect(
-    card.locator('.restrictions-badge')
-  ).toHaveText('Profile defaults');
+  await expect(card.locator('.restrictions-badge')).toHaveText('Profile defaults');
 });
 
 test('17 - account without devices sees the pairing empty state', async ({ page }) => {
-  await login(page);
-
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'fornect-auth-user',
-      JSON.stringify({
-        id: 'user-other',
-        name: 'Other User',
-        email: 'other@fornect.com',
-        accountId: 'account-other-999'
-      })
-    );
-  });
+  await login(page, { withDevices: false });
 
   await page.goto('/devices');
 
-  await expect(
-    page.getByRole('heading', { name: 'No devices connected' })
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No devices connected' })).toBeVisible();
 
-  await page
-    .getByRole('link', { name: 'Pair Fornect device' })
-    .click();
+  await page.getByRole('link', { name: 'Pair Fornect device' }).click();
 
   await expect(page).toHaveURL(/\/pair-device$/);
 });
@@ -557,96 +648,74 @@ test('17 - account without devices sees the pairing empty state', async ({ page 
 
 function levelOption(page: Page, title: string) {
   return page.locator('.protection-option').filter({
-    has: page.getByRole('heading', { name: title, exact: true })
+    has: page.getByRole('heading', { name: title, exact: true }),
   });
 }
 
 test('18 - lowering to standard keeps the certificate installed', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/amar-iphone/protection');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.iphone}/protection`);
 
-  await expect(
-    page.locator('.section-heading h2')
-  ).toHaveText('Full Protection');
+  await expect(page.locator('.section-heading h2')).toHaveText('Full Protection');
 
   await levelOption(page, 'Standard Protection').click();
 
-  await expect(
-    page.locator('.section-heading h2')
-  ).toHaveText('Standard Protection');
+  await expect(page.locator('.section-heading h2')).toHaveText('Standard Protection');
 
   // Profil ostaje na uredjaju - to je cijela poenta izmjene.
-  await expect(
-    page.getByText('Paired', { exact: true })
-  ).toBeVisible();
+  await expect(page.getByText('Paired', { exact: true })).toBeVisible();
 
   await page.reload();
 
-  await expect(
-    page.locator('.section-heading h2')
-  ).toHaveText('Standard Protection');
+  await expect(page.locator('.section-heading h2')).toHaveText('Standard Protection');
 
-  await expect(
-    page.getByText('Paired', { exact: true })
-  ).toBeVisible();
+  await expect(page.getByText('Paired', { exact: true })).toBeVisible();
 });
 
 test('19 - full protection is locked until the profile is installed', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/living-room-tv/protection');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.tv}/protection`);
 
   const full = levelOption(page, 'Full Protection');
 
-  await expect(full.locator('.option-lock')).toHaveText(
-    'Requires an installed protection profile'
-  );
+  await expect(full.locator('.option-lock')).toHaveText('Requires an installed protection profile');
 
   // Klik ne smije ostati mrtav: vodi u instalaciju profila.
   await full.click();
 
-  await expect(
-    page.getByText('Waiting for confirmation')
-  ).toBeVisible();
+  await expect(page.getByText('Waiting for confirmation')).toBeVisible();
 });
 
 test('20 - protection can be switched off and back on', async ({ page }) => {
-  await login(page);
-  await page.goto('/devices/amar-iphone/protection');
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.iphone}/protection`);
 
   await levelOption(page, 'Off').click();
 
-  await expect(
-    page.locator('.section-heading h2')
-  ).toHaveText('Off');
+  await expect(page.locator('.section-heading h2')).toHaveText('Off');
 
   await page.reload();
 
-  await expect(
-    page.locator('.section-heading h2')
-  ).toHaveText('Off');
+  await expect(page.locator('.section-heading h2')).toHaveText('Off');
 
   await levelOption(page, 'Standard Protection').click();
 
-  await expect(
-    page.locator('.section-heading h2')
-  ).toHaveText('Standard Protection');
+  await expect(page.locator('.section-heading h2')).toHaveText('Standard Protection');
 });
 
 test('21 - offline device raises a notification that can be turned off', async ({ page }) => {
-  await login(page);
+  const seeded = await login(page);
 
   // PlayStation 5 je offline i ima tinejdzerski profil, pa je
   // pracenje prisutnosti podrazumijevano ukljuceno.
   await page.goto('/notifications');
 
-  await expect(
-    page.getByText('PlayStation 5').first()
-  ).toBeVisible();
+  await expect(page.getByText('PlayStation 5').first()).toBeVisible();
 
-  await page.goto('/devices/playstation-5');
+  await page.goto(`/devices/${seeded.deviceIds.playstation}`);
 
   const row = page.locator('.restriction-item').filter({
-    hasText: 'Notify me when this device is off the network'
+    hasText: 'Notify me when this device is off the network',
   });
 
   await expect(row.locator('input')).toBeChecked();
@@ -662,7 +731,5 @@ test('21 - offline device raises a notification that can be turned off', async (
   // Obavjestenje prati stvarno stanje, pa nestaje samo.
   await page.goto('/notifications');
 
-  await expect(
-    page.getByText('PlayStation 5')
-  ).toHaveCount(0);
+  await expect(page.getByText('PlayStation 5')).toHaveCount(0);
 });

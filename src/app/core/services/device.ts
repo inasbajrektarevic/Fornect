@@ -126,9 +126,16 @@ export class DeviceService {
     return this.allDevices().filter((device) => device.accountId === accountId);
   });
 
+  // Prati u toku li je (ili je bio) inicijalni load — koristi ga
+  // ensureLoaded() (route resolver) da sačeka da se завrši prije
+  // nego se komponenta za konkretan uređaj konstruiše. Bez ovoga,
+  // svjež (puni) page load direktno na /devices/:id zna pokušati
+  // pročitati uređaj PRIJE nego što API odgovor stigne.
+  private loadPromise: Promise<void> = Promise.resolve();
+
   constructor() {
     if (this.authService.isAuthenticated()) {
-      void this.loadFromApi();
+      this.loadPromise = this.loadFromApi();
     }
   }
 
@@ -137,7 +144,17 @@ export class DeviceService {
    * da učita network_devices trenutnog naloga sa backend-a.
    */
   syncWithCurrentAccount(): void {
-    void this.loadFromApi();
+    this.loadPromise = this.loadFromApi();
+  }
+
+  /**
+   * Sačeka da se trenutni (ili prethodni) load uređaja završi.
+   * Koristi ga route resolver za rute koje pretpostavljaju da je
+   * konkretan uređaj već učitan u trenutku konstrukcije komponente
+   * (device-details, schedule, protection, device-setup).
+   */
+  ensureLoaded(): Promise<void> {
+    return this.loadPromise;
   }
 
   discoverDemoDevicesForCurrentAccount(): void {

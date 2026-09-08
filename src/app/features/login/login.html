@@ -1,6 +1,5 @@
 ﻿<div class="login-page">
   <div class="login-card">
-
     <app-language-switch />
 
     <div class="brand">
@@ -52,43 +51,32 @@
             name="password"
             type="password"
             [(ngModel)]="password"
-            [placeholder]="
-              'login.passwordPlaceholder'
-                | translate
-            "
+            [placeholder]="'login.passwordPlaceholder' | translate"
             autocomplete="current-password"
           />
         </div>
 
         <div class="login-options">
           <label class="remember-me">
-            <input
-              type="checkbox"
-              name="rememberMe"
-              [(ngModel)]="rememberMe"
-            />
+            <input type="checkbox" name="rememberMe" [(ngModel)]="rememberMe" />
 
             <span>
               {{ 'login.rememberMe' | translate }}
             </span>
           </label>
 
-          <a
-            routerLink="/forgot-password"
-            class="forgot-link">
+          <a routerLink="/forgot-password" class="forgot-link">
             {{ 'login.forgotPassword' | translate }}
           </a>
         </div>
 
-        @if (errorMessageKey) {
+        @if (errorMessageKey()) {
           <div class="login-error">
-            {{ errorMessageKey | translate }}
+            {{ errorMessageKey() | translate }}
           </div>
         }
 
-        <button
-          type="submit"
-          class="login-button">
+        <button type="submit" class="login-button">
           {{ 'login.signIn' | translate }}
         </button>
 
