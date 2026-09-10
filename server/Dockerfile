@@ -26,4 +26,8 @@ EXPOSE 3000
 # Migracije se primjenjuju pri svakom startu kontejnera — skripta je
 # idempotentna (schema_migrations tabela pamti šta je već primijenjeno),
 # pa je ovo sigurno i pri restartu bez novih migracija.
-CMD ["sh", "-c", "node scripts/migrate.js && node dist/server.js"]
+# ";" a ne "&&" — ako migracija ipak konacno ne uspije (ne samo
+# prolazna DNS/mrezna greska na startu, koju waitForDatabase u
+# migrate.js vec pokriva), server i dalje treba da se digne umjesto
+# da cijeli API padne zbog jedne neuspjele migracije.
+CMD ["sh", "-c", "node scripts/migrate.js; node dist/server.js"]

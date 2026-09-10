@@ -17,6 +17,30 @@ const { Pool } = require('pg');
 
 const MIGRATIONS_DIR = path.resolve(__dirname, '..', 'migrations');
 
+// Kod kontejnerskog starta (Docker/Swarm) baza ponekad još nije
+// mrežno vidljiva (DNS overlay mreže se tek smiruje) — bez retry-a
+// prvi pokušaj puca sa ENOTFOUND/ECONNREFUSED i ruši cijeli kontejner
+// prije nego server uopšte startuje. Par pokušaja sa kratkim
+// razmakom je dovoljno i bezopasno (skripta je i inače idempotentna).
+async function waitForDatabase(pool, attempts = 10, delayMs = 2000) {
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      await pool.query('SELECT 1');
+      return;
+    } catch (error) {
+      if (i === attempts) {
+        throw error;
+      }
+
+      console.warn(
+        `Baza još nije dostupna (pokušaj ${i}/${attempts}: ${error.message}), ponovni pokušaj za ${delayMs}ms...`,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
 
@@ -27,6 +51,8 @@ async function main() {
   const pool = new Pool({ connectionString: databaseUrl });
 
   try {
+    await waitForDatabase(pool);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         name text PRIMARY KEY,
