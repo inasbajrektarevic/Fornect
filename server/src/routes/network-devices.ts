@@ -106,9 +106,25 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
     try {
       await client.query('BEGIN');
 
+      // fornect_device_id se NIKAD ne uzima direktno iz requesta —
+      // account bi mogao proslijediti tuđi device UUID i time
+      // efektivno "prikvačiti" svoj network_device na hub koji nije
+      // njegov. Umjesto toga, server sam nalazi hub kojim account
+      // stvarno raspolaže (preko devices.claimed_by_account_id,
+      // postavljenog isključivo kroz POST /app/hub/claim).
+      const { rows: hubRows } = await client.query<{ id: string }>(
+        `SELECT id FROM devices WHERE claimed_by_account_id = $1 ORDER BY created_at ASC LIMIT 1`,
+        [request.accountId],
+      );
+
+      const resolvedBody: CreateBody = {
+        ...body,
+        fornect_device_id: hubRows[0]?.id ?? null,
+      };
+
       const { columns, placeholders, values } = buildInsert(
         request.accountId!,
-        body,
+        resolvedBody,
         CREATABLE_FIELDS,
       );
 

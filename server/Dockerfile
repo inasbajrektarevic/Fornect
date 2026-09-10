@@ -22,4 +22,8 @@ COPY scripts ./scripts
 USER node
 
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+
+# Migracije se primjenjuju pri svakom startu kontejnera — skripta je
+# idempotentna (schema_migrations tabela pamti šta je već primijenjeno),
+# pa je ovo sigurno i pri restartu bez novih migracija.
+CMD ["sh", "-c", "node scripts/migrate.js && node dist/server.js"]

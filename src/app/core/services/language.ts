@@ -703,26 +703,28 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'pair.deviceSetup': 'Podešavanje uređaja',
     'pair.title': 'Uparite svoj Fornect uređaj',
     'pair.intro':
-      'Povežite ovaj račun sa svojim fizičkim Fornect uređajem. Možete skenirati QR kod ili unijeti serijski broj.',
+      'Povežite ovaj račun sa svojim fizičkim Fornect uređajem. Unesite 6-cifreni kod prikazan na uređaju.',
 
     'pair.scanQr': 'Skeniraj QR kod',
     'pair.scanQrDescription':
       'Koristite kod prikazan na Fornect uređaju.',
-    'pair.serialNumber': 'Serijski broj',
+    'pair.serialNumber': 'Kod za uparivanje',
     'pair.serialDescription':
-      'Ručno unesite serijski broj.',
+      'Ručno unesite 6-cifreni kod.',
 
     'pair.scanDeviceQr':
       'Skenirajte QR kod uređaja',
     'pair.realCameraDescription':
       'U pravoj aplikaciji ovdje će se otvoriti kamera i skenirati QR kod sa fizičkog Fornect uređaja.',
-    'pair.simulateQr': 'Simuliraj QR skeniranje',
+    'pair.simulateQr': 'Skeniraj QR kod',
     'pair.pocCamera':
-      'POC način rada — skeniranje kamerom bit će povezano kasnije.',
+      'POC način rada — skeniranje kamerom bit će povezano kasnije. Unesite kod ručno.',
+    'pair.qrNotAvailable':
+      'Skeniranje kamerom još nije povezano — unesite kod ručno.',
 
-    'pair.deviceSerial': 'Serijski broj uređaja',
+    'pair.deviceSerial': 'Kod za uparivanje',
     'pair.invalidSerial':
-      'Unesite ispravan serijski broj.',
+      'Kod je netačan, istekao je, ili je uređaj već uparen. Zatražite novi kod na uređaju.',
     'pair.pairDevice': 'Upari uređaj',
     'pair.cancel':
       'Odustani i vrati se na prijavu',
@@ -1630,26 +1632,28 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'pair.deviceSetup': 'Device setup',
     'pair.title': 'Pair your Fornect device',
     'pair.intro':
-      'Connect this account to your physical Fornect device. You can scan its QR code or enter the serial number.',
+      'Connect this account to your physical Fornect device. Enter the 6-digit code shown on the device.',
 
     'pair.scanQr': 'Scan QR code',
     'pair.scanQrDescription':
       'Use the code shown on your Fornect device.',
-    'pair.serialNumber': 'Serial number',
+    'pair.serialNumber': 'Pairing code',
     'pair.serialDescription':
-      'Enter the serial number manually.',
+      'Enter the 6-digit code manually.',
 
     'pair.scanDeviceQr':
       'Scan device QR code',
     'pair.realCameraDescription':
       'In the real app this will open the camera and scan the QR code from the physical Fornect device.',
-    'pair.simulateQr': 'Simulate QR scan',
+    'pair.simulateQr': 'Scan QR code',
     'pair.pocCamera':
-      'POC mode — camera scanning will be connected later.',
+      'POC mode — camera scanning will be connected later. Enter the code manually.',
+    'pair.qrNotAvailable':
+      'Camera scanning isn\'t connected yet — enter the code manually.',
 
-    'pair.deviceSerial': 'Device serial number',
+    'pair.deviceSerial': 'Pairing code',
     'pair.invalidSerial':
-      'Enter a valid serial number.',
+      'The code is wrong, expired, or the device is already paired. Request a new code on the device.',
     'pair.pairDevice': 'Pair device',
     'pair.cancel':
       'Cancel and return to sign in',

@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { pool } from '../db';
 import { authenticateDevice } from '../plugins/authenticate-device';
 import { generateDeviceToken, hashDeviceToken } from '../services/device-tokens';
+import { generatePairingCode, PAIRING_CODE_TTL_MINUTES } from '../services/hub-pairing';
 import type { DeviceRow } from '../types';
 
 interface RegisterBody {
@@ -48,18 +49,23 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
 
       const token = generateDeviceToken();
       const tokenHash = hashDeviceToken(token);
+      const pairingCode = generatePairingCode();
 
       const { rows } = await pool.query<DeviceRow>(
-        `INSERT INTO devices (name, token_hash, kind, mode, capacity)
-       VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO devices (name, token_hash, kind, mode, capacity, pairing_code, pairing_code_expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now() + ($7 || ' minutes')::interval)
        RETURNING *`,
-        [name, tokenHash, kind, mode, capacity ?? null],
+        [name, tokenHash, kind, mode, capacity ?? null, pairingCode, PAIRING_CODE_TTL_MINUTES],
       );
 
       const device = rows[0]!;
 
       // Token se vraća SAMO ovdje, jednom — uređaj ga mora sačuvati,
       // jer se ne može ponovo pročitati (u bazi je samo hash).
+      // pairing_code se vraća i ovdje (uređaj ga prikazuje na svom
+      // ekranu/log-u da ga korisnik unese u app) — za razliku od
+      // tokena, može se ponovo zatražiti preko /:id/pairing-code ako
+      // istekne prije nego korisnik stigne da ga unese.
       return reply.code(201).send({
         id: device.id,
         name: device.name,
@@ -67,7 +73,41 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
         mode: device.mode,
         capacity: device.capacity,
         token,
+        pairing_code: pairingCode,
+        pairing_code_expires_at: device.pairing_code_expires_at,
         created_at: device.created_at,
+      });
+    },
+  );
+
+  // Uređaj traži svjež pairing kod kad prethodni istekne prije nego
+  // ga je korisnik stigao unijeti u app (15min TTL). Auth preko
+  // Bearer tokena — samo sam uređaj smije regenerisati svoj kod.
+  fastify.post(
+    '/:id/pairing-code',
+    { preHandler: authenticateDevice },
+    async (request, reply) => {
+      const device = request.device!;
+
+      if (device.claimed_by_account_id) {
+        return reply.code(409).send({ error: 'Uređaj je već uparen sa nalogom.' });
+      }
+
+      const pairingCode = generatePairingCode();
+
+      const { rows } = await pool.query<DeviceRow>(
+        `UPDATE devices
+         SET pairing_code = $2, pairing_code_expires_at = now() + ($3 || ' minutes')::interval
+         WHERE id = $1
+         RETURNING *`,
+        [device.id, pairingCode, PAIRING_CODE_TTL_MINUTES],
+      );
+
+      const updated = rows[0]!;
+
+      return reply.send({
+        pairing_code: updated.pairing_code,
+        pairing_code_expires_at: updated.pairing_code_expires_at,
       });
     },
   );

@@ -114,8 +114,10 @@
                 id="serialNumber"
                 name="serialNumber"
                 type="text"
+                inputmode="numeric"
+                maxlength="6"
                 [(ngModel)]="serialNumber"
-                placeholder="e.g. FH-2026-001234"
+                placeholder="npr. 482913"
               />
             </div>
 
@@ -128,6 +130,7 @@
             <button
               type="button"
               class="primary-button"
+              [disabled]="submitting"
               (click)="pairBySerial()">
 
               {{ 'pair.pairDevice' | translate }}

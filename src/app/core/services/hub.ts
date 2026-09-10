@@ -100,6 +100,37 @@ export class HubService {
     this.save(hub);
   }
 
+  /**
+   * Uparuje trenutni nalog sa fizičkim hub-om preko pairing koda koji
+   * je uređaj generisao (POST /api/v1/devices/register ili
+   * /:id/pairing-code). Baca grešku (sa porukom sa backend-a) ako je
+   * kod netačan/istekao/uređaj već uparen — poziva iz
+   * DevicePairing komponente hvataju to i prikazuju korisniku.
+   */
+  async claimHub(pairingCode: string): Promise<HubInfo> {
+    const response = await firstValueFrom(
+      this.http.post<HubApiResponse>(`${API_BASE_URL}/app/hub/claim`, {
+        pairing_code: pairingCode,
+      }),
+    );
+
+    const hub: HubInfo = {
+      ...this.hub(),
+      name: response.name,
+      serialNumber: response.id,
+      kind: response.kind,
+      mode: response.mode,
+      online: response.online,
+      capacity: response.capacity ?? 0,
+      connectedUsers: response.connected_devices,
+    };
+
+    this.hub.set(hub);
+    this.save(hub);
+
+    return hub;
+  }
+
   syncWithCurrentAccount(): void {
     this.hub.set(this.load());
     void this.refreshFromApi();

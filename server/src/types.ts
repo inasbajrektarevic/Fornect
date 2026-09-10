@@ -10,6 +10,9 @@ export interface DeviceRow {
   kind: 'home' | 'pro';
   mode: 'home' | 'hospitality' | 'agency';
   capacity: number | null;
+  claimed_by_account_id: string | null;
+  pairing_code: string | null;
+  pairing_code_expires_at: string | null;
   created_at: string;
   updated_at: string;
 }

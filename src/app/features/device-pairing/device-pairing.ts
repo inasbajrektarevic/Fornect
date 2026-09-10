@@ -7,6 +7,7 @@ import {
 
 import { AuthService } from '../../core/services/auth';
 import { DeviceService } from '../../core/services/device';
+import { HubService } from '../../core/services/hub';
 
 import {
   AppLanguage,
@@ -38,6 +39,9 @@ export class DevicePairing {
   private readonly deviceService =
     inject(DeviceService);
 
+  private readonly hubService =
+    inject(HubService);
+
   private readonly languageService =
     inject(LanguageService);
 
@@ -49,6 +53,7 @@ export class DevicePairing {
   serialNumber = '';
   errorMessageKey = '';
   paired = false;
+  submitting = false;
 
   pairedDevice = {
     name: 'Fornect Home',
@@ -69,35 +74,46 @@ export class DevicePairing {
     this.errorMessageKey = '';
   }
 
+  /**
+   * QR kod (kad kamera skeniranje bude povezano) nosi isti pairing
+   * kod kao i ručni unos — oba puta na kraju zovu isti backend claim.
+   * Dok kamera nije povezana (POC), dugme traži da korisnik prvo
+   * pređe na ručni unos umjesto lažnog "uspjeha".
+   */
   simulateQrScan(): void {
-    this.pairedDevice = {
-      name: 'Fornect Home',
-      serialNumber: 'FH-POC-001',
-      softwareMode: 'Home'
-    };
-
-    this.savePairing();
+    this.errorMessageKey = 'pair.qrNotAvailable';
+    this.method = 'serial';
   }
 
-  pairBySerial(): void {
+  async pairBySerial(): Promise<void> {
     this.errorMessageKey = '';
 
-    const serial =
+    const code =
       this.serialNumber.trim();
 
-    if (serial.length < 6) {
+    if (!/^[0-9]{6}$/.test(code)) {
       this.errorMessageKey =
         'pair.invalidSerial';
       return;
     }
 
-    this.pairedDevice = {
-      name: 'Fornect Home',
-      serialNumber: serial,
-      softwareMode: 'Home'
-    };
+    this.submitting = true;
 
-    this.savePairing();
+    try {
+      const hub = await this.hubService.claimHub(code);
+
+      this.pairedDevice = {
+        name: hub.name,
+        serialNumber: hub.serialNumber,
+        softwareMode: hub.mode
+      };
+
+      this.savePairing();
+    } catch {
+      this.errorMessageKey = 'pair.invalidSerial';
+    } finally {
+      this.submitting = false;
+    }
   }
 
   continueToDashboard(): void {
