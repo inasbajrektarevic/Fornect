@@ -15,6 +15,7 @@ import { hubRoutes } from './routes/hub';
 import { networkDeviceRoutes } from './routes/network-devices';
 import { notificationRoutes } from './routes/notifications';
 import { portalBundleRoutes, portalSettingsRoutes } from './routes/portal-settings';
+import { vpnRoutes } from './routes/vpn';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -69,6 +70,7 @@ export function buildApp() {
       // putanje (/consent-records, /network-devices/:id/consent...) —
       // dio ruta visi ispod uređaja, a dio je na nivou naloga.
       appScope.register(consentRoutes);
+      appScope.register(vpnRoutes);
     },
     { prefix: '/api/v1/app' },
   );

@@ -74,4 +74,12 @@ export const env = {
   // gdje SMTP još nije podešen — niko se ne bi mogao prijaviti ni
   // dobiti kod. Uključiti tek kad slanje mailova radi.
   requireVerifiedEmail: process.env['REQUIRE_VERIFIED_EMAIL'] === 'true',
+  // VPN roaming zaštita (Headscale) — NAMJERNO opcionalno, ne required().
+  // Dok se ne postave, /api/v1/app/vpn/* rute vraćaju 503 umjesto da
+  // sruše cijeli server pri startu (vidi services/headscale.ts). Isto
+  // pravilo koje smo naučili 10.09. na crash-loopu: novi eksterni
+  // integracioni servis ne smije obarati postojeći backend ako
+  // trenutno nije konfigurisan.
+  headscaleUrl: process.env['HEADSCALE_URL'] ?? '',
+  headscaleApiKey: process.env['HEADSCALE_API_KEY'] ?? '',
 };
