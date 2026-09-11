@@ -46,6 +46,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/pro-upgrade/pro-upgrade').then((m) => m.ProUpgrade),
   },
   {
+    path: 'new-devices',
+    canActivate: [authGuard, homeModeGuard],
+    loadComponent: () =>
+      import('./features/new-devices/new-devices').then((m) => m.NewDevices),
+  },
+  {
     path: 'devices',
     canActivate: [authGuard],
     loadComponent: () => import('./features/devices/devices').then((m) => m.Devices),

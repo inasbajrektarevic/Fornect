@@ -27,6 +27,10 @@ export const env = {
 
   deviceOnlineThresholdMinutes: Number(process.env['DEVICE_ONLINE_THRESHOLD_MINUTES'] ?? 15),
 
+  // Nakon koliko sati se neklasifikovan uređaj sam svrstava među
+  // goste (Zadatak 1, Tačka 5). Nula isključuje politiku.
+  autoGuestAfterHours: Number(process.env['AUTO_GUEST_AFTER_HOURS'] ?? 24),
+
   // 'log' upisuje mail u .mail-outbox/ i u log; 'smtp' šalje stvarno.
   // Podrazumijevano je 'log' da razvoj i testovi rade bez SMTP-a, i da
   // se pravi mail nikad ne pošalje slučajno, nego tek kad se svjesno

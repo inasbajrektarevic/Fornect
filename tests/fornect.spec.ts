@@ -889,3 +889,37 @@ test('23 - a wrong verification code is rejected', async ({ page }) => {
 
   expect((await reused.json()).already_verified).toBe(true);
 });
+
+// Red "Novi uredjaji" (Zadatak 1, Tacka 5). Uredjaji bez ekrana nikad
+// nece sami otvoriti captive portal, pa je ovo jedino mjesto na kojem
+// ce vlasnik primijetiti uredjaj koji ne prepoznaje.
+test('24 - unclassified devices are queued for a decision', async ({ page }) => {
+  await login(page);
+
+  // Tri zasijana uredjaja su `unpaired` - niko im jos nije odlucio
+  // zastitu. iPhone je uparen, pa ne ulazi u red.
+  const banner = page.locator('.new-devices-banner');
+
+  await expect(banner).toBeVisible();
+  await expect(banner.locator('.new-devices-count')).toHaveText('3');
+
+  await banner.click();
+
+  await expect(page).toHaveURL(/\/new-devices$/);
+  await expect(page.locator('.queue-item')).toHaveCount(3);
+
+  // Osnovna zastita skida uredjaj sa reda. Pristup mu se ne mijenja -
+  // gost i neklasifikovan uredjaj oba imaju DNS zastitu; mijenja se
+  // samo to da prestaje biti otvoreno pitanje.
+  await page
+    .locator('.queue-item')
+    .filter({ hasText: 'Unknown device' })
+    .getByRole('button', { name: 'Basic protection' })
+    .click();
+
+  await expect(page.locator('.queue-item')).toHaveCount(2);
+
+  await page.reload();
+
+  await expect(page.locator('.queue-item')).toHaveCount(2);
+});

@@ -611,6 +611,24 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'notifications.time18Minutes': 'prije 18 min',
     'notifications.time1Hour': 'prije 1 sat',
     'notifications.today': 'Danas',
+    'newDevices.eyebrow': 'MREŽA',
+    'newDevices.title': 'Novi uređaji',
+    'newDevices.subtitle':
+      'Uređaji koje još niste razvrstali.',
+    'newDevices.hint':
+      'Ovi uređaji su se pojavili na vašoj mreži, a niko još nije odlučio kakvu zaštitu dobijaju. Do odluke rade sa osnovnom zaštitom.',
+    'newDevices.firstSeen': 'Prvi put viđen',
+    'newDevices.basicProtection': 'Osnovna zaštita',
+    'newDevices.fullProtection': 'Puna zaštita',
+    'newDevices.autoGuestNote':
+      'Uređaji bez ekrana — televizor, štampač, konzola — nikad se neće sami javiti. Zato se uređaj koji nakon 24 sata i dalje nije razvrstan sam svrstava među goste, uz osnovnu zaštitu.',
+    'newDevices.emptyTitle': 'Nema novih uređaja',
+    'newDevices.emptyBody':
+      'Svaki uređaj na vašoj mreži je razvrstan. Kad se pojavi nepoznat, čekat će vas ovdje.',
+    'newDevices.allDevices': 'Svi uređaji',
+    'newDevices.bannerTitle': 'Novi uređaji čekaju odluku',
+    'newDevices.bannerBody':
+      'Pogledajte ih — među njima može biti i uređaj koji ne prepoznajete.',
     'notifications.now': 'Sada',
 
     'notifications.deviceLeftNetwork':
@@ -1606,6 +1624,24 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'notifications.time18Minutes': '18 min ago',
     'notifications.time1Hour': '1 hour ago',
     'notifications.today': 'Today',
+    'newDevices.eyebrow': 'NETWORK',
+    'newDevices.title': 'New devices',
+    'newDevices.subtitle':
+      'Devices you have not classified yet.',
+    'newDevices.hint':
+      'These devices appeared on your network and nobody has decided what protection they get. Until then they run with basic protection.',
+    'newDevices.firstSeen': 'First seen',
+    'newDevices.basicProtection': 'Basic protection',
+    'newDevices.fullProtection': 'Full protection',
+    'newDevices.autoGuestNote':
+      'Devices without a screen — a TV, a printer, a console — will never answer for themselves. So a device still unclassified after 24 hours is placed among guests, with basic protection.',
+    'newDevices.emptyTitle': 'No new devices',
+    'newDevices.emptyBody':
+      'Every device on your network is classified. When an unknown one shows up, it will be waiting here.',
+    'newDevices.allDevices': 'All devices',
+    'newDevices.bannerTitle': 'New devices need a decision',
+    'newDevices.bannerBody':
+      'Take a look — one of them may be a device you do not recognise.',
     'notifications.now': 'Now',
 
     'notifications.deviceLeftNetwork':

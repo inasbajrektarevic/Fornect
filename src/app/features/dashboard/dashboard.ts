@@ -37,6 +37,15 @@ export class Dashboard {
     return this.notificationService.getUnreadCount();
   }
 
+  /**
+   * Uređaji koje niko još nije klasifikovao. Kad ih ima, na vrhu
+   * dashboarda stoji poziv da se to riješi — to je jedino mjesto na
+   * kojem će vlasnik primijetiti uređaj koji ne prepoznaje.
+   */
+  get unclassifiedCount(): number {
+    return this.deviceService.unclassifiedDevices().length;
+  }
+
   get devicesOnline(): number {
     return this.deviceService.devices()
       .filter(device => device.online)

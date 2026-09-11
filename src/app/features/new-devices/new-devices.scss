@@ -1,0 +1,195 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  font-family: var(--fn-font);
+  background: var(--fn-bg);
+  color: var(--fn-ink);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 32px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--fn-border);
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--fn-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--fn-muted);
+  font-size: 14px;
+}
+
+.back-button,
+.secondary-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--fn-border-strong);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--fn-ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.back-button:hover,
+.secondary-button:hover {
+  background: var(--fn-surface-muted);
+}
+
+.primary-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--fn-orange-btn);
+  border-radius: 12px;
+  background: var(--fn-orange-btn);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-button:hover {
+  background: var(--fn-orange-btn-strong);
+}
+
+.content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.queue-hint,
+.queue-note {
+  margin: 0 0 18px;
+  color: var(--fn-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.queue-note {
+  margin: 18px 0 0;
+  font-size: 13px;
+}
+
+.device-queue {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid var(--fn-border);
+  border-radius: 18px;
+}
+
+.device-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.device-icon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--fn-surface-muted);
+  font-size: 22px;
+}
+
+.device-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.device-text strong {
+  font-size: 16px;
+}
+
+.device-text small {
+  color: var(--fn-muted);
+  font-size: 12px;
+}
+
+.device-mac {
+  font-family: ui-monospace, monospace;
+}
+
+.queue-actions {
+  display: flex;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.empty-state {
+  padding: 40px 24px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid var(--fn-border);
+  border-radius: 20px;
+}
+
+.empty-state h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.empty-state p {
+  margin: 0 0 20px;
+  color: var(--fn-muted);
+  line-height: 1.6;
+}
+
+/* Na telefonu dugmad idu ispod uređaja, u punoj širini reda, umjesto
+   da se stisnu uz desnu ivicu. */
+@media (max-width: 640px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .content {
+    padding: 20px;
+  }
+
+  .queue-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .queue-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

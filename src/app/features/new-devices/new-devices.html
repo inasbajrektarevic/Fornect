@@ -1,0 +1,100 @@
+<div class="new-devices-page">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">
+        {{ 'newDevices.eyebrow' | translate }}
+      </p>
+
+      <h1>
+        {{ 'newDevices.title' | translate }}
+      </h1>
+
+      <p class="subtitle">
+        {{ 'newDevices.subtitle' | translate }}
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="back-button"
+      routerLink="/dashboard">
+      {{ 'common.backToDashboard' | translate }}
+    </button>
+  </header>
+
+  <main class="content">
+    @if (hasDevices()) {
+      <p class="queue-hint">
+        {{ 'newDevices.hint' | translate }}
+      </p>
+
+      <ul class="device-queue">
+        @for (device of devices(); track device.id) {
+          <li class="queue-item">
+            <div class="device-main">
+              <div class="device-icon">
+                {{ deviceIcon(device) }}
+              </div>
+
+              <div class="device-text">
+                <strong>{{ device.name }}</strong>
+
+                <small class="device-mac">
+                  {{ device.macAddress }}
+                </small>
+
+                @if (firstSeenLabel(device)) {
+                  <small>
+                    {{ 'newDevices.firstSeen' | translate }}:
+                    {{ firstSeenLabel(device) }}
+                  </small>
+                }
+              </div>
+            </div>
+
+            <div class="queue-actions">
+              <button
+                type="button"
+                class="secondary-button"
+                (click)="markAsGuest(device)">
+                {{ 'newDevices.basicProtection' | translate }}
+              </button>
+
+              <button
+                type="button"
+                class="primary-button"
+                [routerLink]="[
+                  '/devices',
+                  device.id,
+                  'protection'
+                ]">
+                {{ 'newDevices.fullProtection' | translate }}
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+
+      <p class="queue-note">
+        {{ 'newDevices.autoGuestNote' | translate }}
+      </p>
+    } @else {
+      <div class="empty-state">
+        <h2>
+          {{ 'newDevices.emptyTitle' | translate }}
+        </h2>
+
+        <p>
+          {{ 'newDevices.emptyBody' | translate }}
+        </p>
+
+        <button
+          type="button"
+          class="secondary-button"
+          routerLink="/devices">
+          {{ 'newDevices.allDevices' | translate }}
+        </button>
+      </div>
+    }
+  </main>
+</div>

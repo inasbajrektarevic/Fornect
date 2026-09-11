@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
 
 import { pool } from '../db';
+import { applyAutoGuestPolicy } from '../services/auto-guest';
 import { syncConsentedMacs } from '../services/device-config-sync';
 
 interface NetworkDeviceRow {
@@ -86,12 +87,23 @@ const JSONB_FIELDS = new Set(['restrictions', 'schedule']);
 
 export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/', async (request, reply) => {
-    const { rows } = await pool.query<NetworkDeviceRow>(
-      'SELECT * FROM network_devices WHERE account_id = $1 ORDER BY created_at DESC',
-      [request.accountId],
-    );
+    const client = await pool.connect();
 
-    return reply.send(rows);
+    try {
+      // Politika se primjenjuje pri čitanju, kao i obavještenja o
+      // kapacitetu i prisutnosti — bez posla u pozadini koji bi mogao
+      // stati a da to niko ne primijeti.
+      await applyAutoGuestPolicy(client, request.accountId!);
+
+      const { rows } = await client.query<NetworkDeviceRow>(
+        'SELECT * FROM network_devices WHERE account_id = $1 ORDER BY created_at DESC',
+        [request.accountId],
+      );
+
+      return reply.send(rows);
+    } finally {
+      client.release();
+    }
   });
 
   fastify.post<{ Body: CreateBody }>('/', async (request, reply) => {
