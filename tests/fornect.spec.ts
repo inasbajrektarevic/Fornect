@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { test, expect, Page } from '@playwright/test';
 
 // ---------------------------------------------------------------
@@ -9,6 +12,50 @@ import { test, expect, Page } from '@playwright/test';
 // ---------------------------------------------------------------
 
 const PASSWORD = 'Fornect2026!';
+
+// Kod za potvrdu emaila sada generise server i salje ga mailom. U
+// razvoju i testovima transport `log` mail upise kao fajl umjesto da
+// ga posalje, pa test moze procitati bas svoj kod.
+//
+// Namjerno NE postoji ruta koja vraca posljednji kod: takva ruta bi
+// bila najkraci put do curenja kodova ako se greskom ukljuci u
+// produkciji. Fajl na disku se preko mreze ne moze dohvatiti.
+const MAIL_OUTBOX = path.resolve(process.cwd(), 'server', '.mail-outbox');
+
+async function readVerificationCode(email: string): Promise<string> {
+  const safe = email.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+  // Mail se upisuje neposredno nakon odgovora na registraciju, pa se
+  // zna desiti da fajl jos ne postoji u trenutku prvog pogleda.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const files = fs.existsSync(MAIL_OUTBOX)
+      ? fs
+          .readdirSync(MAIL_OUTBOX)
+          .filter((name) => name.includes(safe))
+          .sort()
+      : [];
+
+    const newest = files[files.length - 1];
+
+    if (newest) {
+      const mail = JSON.parse(
+        fs.readFileSync(path.join(MAIL_OUTBOX, newest), 'utf8'),
+      ) as { text: string };
+
+      const match = /\b(\d{6})\b/.exec(mail.text);
+
+      if (match) {
+        return match[1];
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error(`Nema maila sa kodom za ${email}`);
+}
+
+
 
 function uniqueEmail(tag: string): string {
   return `${tag}-${Date.now()}-${Math.floor(Math.random() * 1e8)}@fornect.test`;
@@ -555,7 +602,9 @@ test('14 - registration survives an interrupted pairing step', async ({ page }) 
 
   await expect(page).toHaveURL(/\/verify-email$/);
 
-  await page.getByLabel('Verification code').fill('123456');
+  const code = await readVerificationCode(email);
+
+  await page.getByLabel('Verification code').fill(code);
 
   await page.getByRole('button', { name: 'Verify email' }).click();
 
@@ -794,4 +843,49 @@ test('22 - consent is recorded, shown, and can be withdrawn', async ({ page }) =
   // Nakon opoziva certifikat fizicki ostaje na uredjaju, pa korisnik
   // mora dobiti uputstvo kako da ga skine.
   await expect(page.getByText('Remove the certificate from the device')).toBeVisible();
+});
+
+// Verifikacija je do sada bila privid: kod je bio zakucan u frontendu,
+// pa je bilo ko mogao "potvrditi" tudju adresu. Ovaj test cuva to da
+// se ne vrati - pogresan kod mora biti odbijen NA SERVERU.
+test('23 - a wrong verification code is rejected', async ({ page }) => {
+  const email = uniqueEmail('verify-reject');
+
+  await page.request.post('/api/v1/auth/register', {
+    data: { name: 'Verify Test', email, password: PASSWORD },
+  });
+
+  const realCode = await readVerificationCode(email);
+
+  const wrongCode = realCode === '000000' ? '111111' : '000000';
+
+  const rejected = await page.request.post('/api/v1/auth/verify-email', {
+    data: { email, code: wrongCode },
+  });
+
+  expect(rejected.status()).toBe(400);
+
+  // Nalog i dalje nije potvrdjen.
+  const stillUnverified = await page.request.post('/api/v1/auth/login', {
+    data: { email, password: PASSWORD },
+  });
+
+  const body = await stillUnverified.json();
+
+  expect(body.account.email_verified).toBe(false);
+
+  // Pravi kod prolazi...
+  const accepted = await page.request.post('/api/v1/auth/verify-email', {
+    data: { email, code: realCode },
+  });
+
+  expect(accepted.ok()).toBe(true);
+  expect((await accepted.json()).email_verified).toBe(true);
+
+  // ...ali samo jednom: iskoristen kod se ponistava.
+  const reused = await page.request.post('/api/v1/auth/verify-email', {
+    data: { email, code: realCode },
+  });
+
+  expect((await reused.json()).already_verified).toBe(true);
 });

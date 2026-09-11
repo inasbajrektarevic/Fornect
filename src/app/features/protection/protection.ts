@@ -16,6 +16,8 @@ import {
   DeviceConsentState
 } from '../../core/services/consent';
 
+import { serverErrorMessage } from '../../core/services/api-error';
+
 export type CertificatePlatform =
   | 'android'
   | 'ios'
@@ -246,7 +248,10 @@ export class Protection {
 
       this.refreshDevice();
     } catch (error) {
-      this.consentError = this.serverMessage(error);
+      this.consentError = serverErrorMessage(
+        error,
+        this.languageService.t('consent.errorServer'),
+      );
     } finally {
       this.consentBusy = false;
 
@@ -254,29 +259,6 @@ export class Protection {
       // stanje, ni gresku.
       this.changeDetector.markForCheck();
     }
-  }
-
-  /**
-   * Backend vraca konkretan razlog u obliku { error: '...' } - npr.
-   * "Za ovaj uredjaj vec postoji vazeci pristanak". Takva poruka
-   * korisniku govori sta da uradi, dok mu opste "provjerite vezu"
-   * ne govori nista i jos ga navodi na pogresan trag.
-   *
-   * Na opstu poruku padamo samo kad servera zaista nema, pa ni
-   * odgovora nema.
-   */
-  private serverMessage(error: unknown): string {
-    const body = (error as { error?: unknown } | null)?.error;
-
-    if (body && typeof body === 'object') {
-      const message = (body as { error?: unknown }).error;
-
-      if (typeof message === 'string' && message.trim()) {
-        return message;
-      }
-    }
-
-    return this.languageService.t('consent.errorServer');
   }
 
   private async loadConsent(): Promise<void> {

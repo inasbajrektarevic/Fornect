@@ -118,6 +118,31 @@ export class AuthService {
     sessionStorage.removeItem('fornect-email-verified');
   }
 
+  /**
+   * Potvrda email adrese kodom koji je server poslao na mail.
+   *
+   * Kod se provjerava NA SERVERU — ranije je bio zakucan u frontendu
+   * (123456), pa je provjera bila samo privid: bilo ko je mogao
+   * "potvrditi" bilo koju adresu.
+   */
+  async verifyEmail(email: string, code: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${API_BASE_URL}/auth/verify-email`, {
+        email: email.trim().toLowerCase(),
+        code: code.trim(),
+      }),
+    );
+  }
+
+  /** Novi kod na istu adresu. Server ograničava koliko često. */
+  async resendVerification(email: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${API_BASE_URL}/auth/resend-verification`, {
+        email: email.trim().toLowerCase(),
+      }),
+    );
+  }
+
   completeRegistration(): boolean {
     const saved = sessionStorage.getItem(this.pendingRegistrationKey);
 

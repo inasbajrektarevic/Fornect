@@ -27,6 +27,11 @@ export interface AccountRow {
   email: string;
   password_hash: string;
   email_verified: boolean;
+  /** sha256 otisak koda za potvrdu; sam kod se nigdje ne cuva. */
+  verification_code_hash: string | null;
+  verification_code_expires_at: string | null;
+  verification_attempts: number;
+  verification_sent_at: string | null;
   created_at: string;
 }
 

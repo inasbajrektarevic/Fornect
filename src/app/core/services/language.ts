@@ -679,6 +679,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'verify.yourEmail': 'vašu email adresu',
     'verify.code': 'Kod za potvrdu',
     'verify.pocCode': 'POC kod za potvrdu:',
+    'verify.enterCode': 'Unesite kod iz emaila.',
+    'verify.resendFailed':
+      'Slanje novog koda nije uspjelo. Pokušajte ponovo za koji trenutak.',
     'verify.invalidCode':
       'Kod za potvrdu nije ispravan.',
     'verify.codeSent':
@@ -1671,6 +1674,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'verify.yourEmail': 'your email address',
     'verify.code': 'Verification code',
     'verify.pocCode': 'POC verification code:',
+    'verify.enterCode': 'Enter the code from the email.',
+    'verify.resendFailed':
+      'Sending a new code failed. Try again in a moment.',
     'verify.invalidCode':
       'Invalid verification code.',
     'verify.codeSent':

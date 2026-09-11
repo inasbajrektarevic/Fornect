@@ -26,4 +26,24 @@ export const env = {
   adminApiKey: required('ADMIN_API_KEY'),
 
   deviceOnlineThresholdMinutes: Number(process.env['DEVICE_ONLINE_THRESHOLD_MINUTES'] ?? 15),
+
+  // 'log' upisuje mail u .mail-outbox/ i u log; 'smtp' šalje stvarno.
+  // Podrazumijevano je 'log' da razvoj i testovi rade bez SMTP-a, i da
+  // se pravi mail nikad ne pošalje slučajno, nego tek kad se svjesno
+  // uključi.
+  mailTransport: process.env['MAIL_TRANSPORT'] === 'smtp' ? 'smtp' : 'log',
+  mailFrom: process.env['MAIL_FROM'] ?? 'Fornect <no-reply@fornect.local>',
+
+  smtpHost: process.env['SMTP_HOST'] ?? '',
+  smtpPort: Number(process.env['SMTP_PORT'] ?? 587),
+  smtpUser: process.env['SMTP_USER'] ?? '',
+  smtpPassword: process.env['SMTP_PASSWORD'] ?? '',
+
+  // Da li prijava traži potvrđenu email adresu.
+  //
+  // Podrazumijevano ISKLJUČENO, svjesno: da je uključeno, uključivanje
+  // ove izmjene bi odmah zaključalo sve postojeće naloge na produkciji,
+  // gdje SMTP još nije podešen — niko se ne bi mogao prijaviti ni
+  // dobiti kod. Uključiti tek kad slanje mailova radi.
+  requireVerifiedEmail: process.env['REQUIRE_VERIFIED_EMAIL'] === 'true',
 };

@@ -54,3 +54,7 @@ Thumbs.db
 # Razvojni CA hub simulatora. Sadrži PRIVATNI KLJUČ certifikata —
 # nikad ne smije u repozitorij.
 /server/.hub-ca
+
+# Mailovi koje razvojni transport upisuje umjesto stvarnog slanja.
+# Sadrze kodove za potvrdu - ne idu u repozitorij.
+/server/.mail-outbox
