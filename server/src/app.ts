@@ -6,6 +6,7 @@ import './types';
 import { authenticateAccount } from './plugins/authenticate-account';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
+import { consentRoutes } from './routes/consent';
 import { deviceRoutes } from './routes/devices';
 import { healthRoutes } from './routes/health';
 import { hubRoutes } from './routes/hub';
@@ -45,6 +46,11 @@ export function buildApp() {
 
       appScope.register(networkDeviceRoutes, { prefix: '/network-devices' });
       appScope.register(hubRoutes);
+
+      // Pristanak na presretanje. Bez prefiksa, jer sam definiše pune
+      // putanje (/consent-records, /network-devices/:id/consent...) —
+      // dio ruta visi ispod uređaja, a dio je na nivou naloga.
+      appScope.register(consentRoutes);
     },
     { prefix: '/api/v1/app' },
   );

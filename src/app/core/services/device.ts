@@ -10,7 +10,18 @@ export type { DayWindow, DeviceSchedule, ScheduleDay, ScheduleMode } from './sch
 
 export type DeviceProfile = 'Child' | 'Teen' | 'Adult' | 'Admin' | null;
 export type ProtectionLevel = 'standard' | 'full' | 'needs-setup';
-export type PairingState = 'unpaired' | 'pairing' | 'paired' | 'failed';
+/**
+ * `guest` je uređaj za koji je vlasnik svjesno izabrao samo osnovnu
+ * zaštitu, ili kojem je pristanak opozvan. Razlikuje se od `unpaired`,
+ * koji znači "još niko nije odlučio" — uređaj u tom stanju na mreži
+ * dobija poziv kroz captive portal, a gost ne dobija ništa.
+ */
+export type PairingState =
+  | 'unpaired'
+  | 'guest'
+  | 'pairing'
+  | 'paired'
+  | 'failed';
 
 export interface DeviceRestrictions {
   blockAdultContent: boolean;
@@ -155,6 +166,17 @@ export class DeviceService {
    */
   ensureLoaded(): Promise<void> {
     return this.loadPromise;
+  }
+
+  /**
+   * Ponovo učitava uređaje sa servera i vraća promise, za razliku od
+   * syncWithCurrentAccount() koji ga guta. Potrebno nakon radnji koje
+   * stanje uređaja mijenjaju NA SERVERU — npr. tok pristanka, gdje
+   * backend sam prebacuje pairing_state — jer lokalna kopija tada
+   * ostaje zastarjela i ekran bi prikazao staro stanje.
+   */
+  reload(): Promise<void> {
+    return this.loadFromApi();
   }
 
   discoverDemoDevicesForCurrentAccount(): void {

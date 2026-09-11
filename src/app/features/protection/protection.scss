@@ -568,3 +568,126 @@
     flex-direction: column;
   }
 }
+
+/* Pristanak: forma, zapis i upozorenje o novoj verziji politike. */
+
+.consent-form,
+.consent-record,
+.consent-warning,
+.cert-fingerprint {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--fn-border);
+  border-radius: 14px;
+  background: var(--fn-surface-muted);
+}
+
+.consent-form h3,
+.consent-warning strong {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.consent-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.consent-field span {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.consent-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--fn-border-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+}
+
+.consent-field input:focus {
+  outline: none;
+  border-color: var(--fn-orange);
+  box-shadow: 0 0 0 3px rgba(245, 130, 31, 0.12);
+}
+
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.consent-check input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  accent-color: var(--fn-ink);
+  cursor: pointer;
+}
+
+.consent-error {
+  margin: 10px 0 0;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.consent-warning {
+  border-color: rgba(245, 130, 31, 0.35);
+  background: rgba(245, 130, 31, 0.08);
+}
+
+.consent-record dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.consent-record dt {
+  color: var(--fn-muted);
+  font-size: 12px;
+}
+
+.consent-record dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cert-fingerprint code {
+  display: block;
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* Dodirne mete na telefonu. */
+@media (pointer: coarse) {
+  .consent-check input {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* Uputstvo za uklanjanje certifikata nakon opoziva pristanka. */
+.cert-removal {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--fn-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}

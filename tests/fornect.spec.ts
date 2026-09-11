@@ -386,7 +386,9 @@ test('08 - protection pairing survives refresh', async ({ page }) => {
   const seeded = await login(page);
   await page.goto(`/devices/${seeded.deviceIds.tv}/protection`);
 
-  await page.getByRole('button', { name: 'Start pairing' }).click();
+  await page.getByRole('button', { name: 'Continue with consent' }).click();
+
+  await giveConsent(page);
 
   await expect(page.getByText('Waiting for confirmation')).toBeVisible();
 
@@ -646,6 +648,23 @@ test('17 - account without devices sees the pairing empty state', async ({ page 
 // preduslov za najvisu - ne jacina za sebe. Ova cetiri testa
 // pokrivaju upravo tu razliku, jer se na njoj vec grijesilo.
 
+// Puna zastita vise ne pocinje instalacijom nego pristankom: forma
+// biljezi ko je pristao i na koju verziju politike. Testovi zato
+// prolaze kroz nju umjesto da klikaju pravo na instalaciju.
+async function giveConsent(page: Page) {
+  await page
+    .getByLabel('Full name of the person giving consent')
+    .fill('Test Guardian');
+
+  await page.getByLabel('Relationship to the device user').fill('parent');
+
+  await page
+    .getByLabel('I have read and accept the traffic inspection policy')
+    .check();
+
+  await page.getByRole('button', { name: 'Give consent' }).click();
+}
+
 function levelOption(page: Page, title: string) {
   return page.locator('.protection-option').filter({
     has: page.getByRole('heading', { name: title, exact: true }),
@@ -680,8 +699,14 @@ test('19 - full protection is locked until the profile is installed', async ({ p
 
   await expect(full.locator('.option-lock')).toHaveText('Requires an installed protection profile');
 
-  // Klik ne smije ostati mrtav: vodi u instalaciju profila.
+  // Klik ne smije ostati mrtav: vodi u pristanak, pa u instalaciju.
   await full.click();
+
+  await expect(
+    page.getByRole('heading', { name: 'Consent to full protection' }),
+  ).toBeVisible();
+
+  await giveConsent(page);
 
   await expect(page.getByText('Waiting for confirmation')).toBeVisible();
 });
@@ -732,4 +757,41 @@ test('21 - offline device raises a notification that can be turned off', async (
   await page.goto('/notifications');
 
   await expect(page.getByText('PlayStation 5')).toHaveCount(0);
+});
+
+// Pristanak je dokument, ne prekidac: mora se vidjeti ko ga je dao i
+// da li je instalacija stvarno potvrdjena ili samo izjavljena.
+test('22 - consent is recorded, shown, and can be withdrawn', async ({ page }) => {
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.tv}/protection`);
+
+  await page.getByRole('button', { name: 'Continue with consent' }).click();
+  await giveConsent(page);
+
+  await page.getByRole('button', { name: 'Profile installed' }).click();
+
+  const record = page.locator('.consent-record');
+
+  await expect(record).toBeVisible();
+  await expect(record).toContainText('Test Guardian');
+  await expect(record).toContainText('parent');
+
+  // Potvrdio je covjek, ne uredjaj - i zapis to mora reci.
+  await expect(record).toContainText('Confirmed manually');
+
+  await page.reload();
+
+  await expect(page.locator('.consent-record')).toContainText('Test Guardian');
+
+  await page.getByRole('button', { name: 'Withdraw consent' }).click();
+
+  // "Full Protection" postoji i kao naziv kartice nivoa, pa se stanje
+  // mora citati iz statusa u zaglavlju, ne iz bilo kojeg naslova.
+  await expect(page.locator('.section-heading h2')).toHaveText(
+    'Standard Protection',
+  );
+
+  // Nakon opoziva certifikat fizicki ostaje na uredjaju, pa korisnik
+  // mora dobiti uputstvo kako da ga skine.
+  await expect(page.getByText('Remove the certificate from the device')).toBeVisible();
 });

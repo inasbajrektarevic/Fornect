@@ -26,6 +26,11 @@ interface ConfigAckBody {
   version?: number;
 }
 
+interface CaBody {
+  certificate_pem?: string;
+  fingerprint_sha256?: string;
+}
+
 export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{ Body: RegisterBody }>(
     '/register',
@@ -184,6 +189,52 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       return reply.send({ ok: true });
+    },
+  );
+
+  // Hub prijavljuje JAVNI dio svog CA certifikata. Ključ ostaje na
+  // uređaju — vidi komentar uz migraciju 010.
+  fastify.post<{ Params: { id: string }; Body: CaBody }>(
+    '/:id/ca',
+    { preHandler: authenticateDevice },
+    async (request, reply) => {
+      const device = request.device!;
+      const { certificate_pem, fingerprint_sha256 } = request.body ?? {};
+
+      if (!certificate_pem || !fingerprint_sha256) {
+        return reply
+          .code(400)
+          .send({ error: 'certificate_pem i fingerprint_sha256 su obavezni.' });
+      }
+
+      // Zaštita od najgore moguće greške u agentu: da slučajno ne
+      // pošalje privatni ključ umjesto certifikata. Odbijamo ga prije
+      // nego dodirne bazu — jednom upisan ključ bi se morao smatrati
+      // kompromitovanim.
+      if (/PRIVATE KEY/i.test(certificate_pem)) {
+        return reply.code(400).send({
+          error:
+            'Poslan je privatni ključ. Ovdje se prima samo javni certifikat.',
+        });
+      }
+
+      if (!/BEGIN CERTIFICATE/.test(certificate_pem)) {
+        return reply
+          .code(400)
+          .send({ error: 'certificate_pem nije PEM certifikat.' });
+      }
+
+      await pool.query(
+        `UPDATE devices
+         SET ca_certificate_pem = $2,
+             ca_fingerprint_sha256 = $3,
+             ca_registered_at = now(),
+             updated_at = now()
+         WHERE id = $1`,
+        [device.id, certificate_pem, fingerprint_sha256],
+      );
+
+      return reply.send({ ok: true, fingerprint_sha256 });
     },
   );
 }

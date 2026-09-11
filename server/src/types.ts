@@ -13,6 +13,10 @@ export interface DeviceRow {
   claimed_by_account_id: string | null;
   pairing_code: string | null;
   pairing_code_expires_at: string | null;
+  /** Javni CA certifikat hub-a. Privatni ključ nikad ne dolazi ovdje. */
+  ca_certificate_pem: string | null;
+  ca_fingerprint_sha256: string | null;
+  ca_registered_at: string | null;
   created_at: string;
   updated_at: string;
 }

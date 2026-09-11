@@ -245,6 +245,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Potvrdite naziv Fornect i, ako telefon zatraži, unesite PIN ili otisak prsta.',
     'protection.androidStep5':
       'Vratite se ovdje i potvrdite da je profil instaliran.',
+    'protection.androidFirefoxNote':
+      'Firefox na Androidu drži vlastitu listu certifikata i ne koristi sistemsku. Ako ga koristite, certifikat morate dodati i u sam Firefox — u suprotnom on ostaje bez pune zaštite.',
     'protection.androidNote':
       'Na novijim Android verzijama certifikat važi za internet preglednik, dok pojedine aplikacije nastavljaju sa standardnom zaštitom.',
     'protection.iosStep1':
@@ -932,7 +934,68 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.passwordMismatch':
       'Nove lozinke se ne podudaraju.',
     'settings.passwordBackendReady':
-      'Promjena lozinke je spremna za povezivanje sa backendom.'
+      'Promjena lozinke je spremna za povezivanje sa backendom.',
+
+    'protectionOverview.guest': 'Osnovna zaštita',
+    'consent.formTitle': 'Pristanak na punu zaštitu',
+    'consent.formIntro':
+      'Puna zaštita znači da Fornect uređaj pregleda i zaštićeni (HTTPS) saobraćaj ovog uređaja. Zato je potreban izričit pristanak, koji ostaje zabilježen.',
+    'consent.guardianName': 'Ime i prezime osobe koja daje pristanak',
+    'consent.guardianRelation': 'Odnos prema korisniku uređaja',
+    'consent.relationPlaceholder':
+      'npr. roditelj, staratelj, vlasnik uređaja',
+    'consent.isMinor': 'Uređaj koristi maloljetna osoba',
+    'consent.acceptPolicy':
+      'Pročitao sam i prihvatam politiku pregleda saobraćaja',
+    'consent.scopeNote':
+      'Pristanak se odnosi samo na ovaj uređaj i može se opozvati u svakom trenutku.',
+    'consent.cancel': 'Odustani',
+    'consent.submit': 'Dajem pristanak',
+    'consent.errorFields':
+      'Unesite ime i odnos prema korisniku uređaja.',
+    'consent.errorPolicy':
+      'Morate prihvatiti politiku da biste nastavili.',
+    'consent.errorServer':
+      'Radnja nije uspjela. Provjerite vezu i pokušajte ponovo.',
+    'consent.failedByUser':
+      'Korisnik je prijavio da instalacija nije uspjela.',
+    'consent.reacceptTitle': 'Politika je izmijenjena',
+    'consent.reacceptBody':
+      'Uslovi pod kojima je pristanak dat su u međuvremenu izmijenjeni. Da bi puna zaštita ostala u primjeni, politiku treba ponovo prihvatiti.',
+    'consent.reacceptButton': 'Pregledaj i prihvati',
+    'consent.recordLabel': 'ZAPIS PRISTANKA',
+    'consent.grantedAt': 'Dat',
+    'consent.policyVersion': 'Verzija politike',
+    'consent.proof': 'Potvrda',
+    'consent.proofManual':
+      'Ručno potvrđeno (nije tehnički provjereno)',
+    'consent.proofVerified': 'Tehnički provjereno na uređaju',
+    'consent.minorNote':
+      'Zabilježeno je da uređaj koristi maloljetna osoba i da pristanak daje staratelj.',
+    'consent.revoke': 'Opozovi pristanak',
+    'consent.guestNote':
+      'Ovaj uređaj trenutno koristi osnovnu zaštitu. Pristanak je ranije opozvan ili nije ni dat.',
+    'consent.startWithConsent': 'Nastavi uz pristanak',
+    'consent.removeCertTitle':
+      'Uklonite certifikat sa uređaja',
+    'consent.removeCertBody':
+      'Presretanje je zaustavljeno, ali Fornect certifikat je i dalje instaliran na uređaju i taj uređaj mu i dalje vjeruje. Uklonite ga:',
+    'consent.removeCertAndroid':
+      'Android: Postavke → Sigurnost → Certifikati → obrišite Fornect (i posebno u Firefoxu, ako ga koristite).',
+    'consent.removeCertIos':
+      'iPhone i iPad: Postavke → Općenito → VPN i upravljanje uređajem → uklonite Fornect profil.',
+    'consent.removeCertDesktop':
+      'Računar: otvorite upravljanje certifikatima i obrišite Fornect iz pouzdanih izdavača, te iz samog preglednika ako drži vlastitu listu.',
+    'consent.downloadCertificate': 'Preuzmi certifikat',
+    'consent.fingerprintLabel': 'OTISAK CERTIFIKATA',
+    'consent.fingerprintHint':
+      'Uporedite ovaj otisak sa onim koji uređaj prikazuje pri instalaciji. Ako se ne podudaraju, prekinite instalaciju.',
+    'consent.fingerprintPending':
+      'Otisak će biti prikazan kada Fornect uređaj bude povezan — do tada ga nema čime provjeriti.',
+    'consent.verificationPending':
+      'Kada Fornect uređaj bude povezan, instalacija se provjerava sama. Do tada potvrdite ručno — takva potvrda se u zapisu označava kao neprovjerena.',
+    'consent.consentStillValid':
+      'Pristanak i dalje važi — ponavlja se samo instalacija certifikata.'
   },
 
   en: {
@@ -1174,6 +1237,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Confirm the name Fornect and, if the phone asks, enter your PIN or fingerprint.',
     'protection.androidStep5':
       'Come back here and confirm that the profile is installed.',
+    'protection.androidFirefoxNote':
+      'Firefox on Android keeps its own certificate list and does not use the system one. If you use it, the certificate must also be added inside Firefox — otherwise it stays without full protection.',
     'protection.androidNote':
       'On newer Android versions the certificate applies to the web browser, while some apps continue with standard protection.',
     'protection.iosStep1':
@@ -1861,7 +1926,68 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.passwordMismatch':
       'New passwords do not match.',
     'settings.passwordBackendReady':
-      'Password change is ready for backend integration.'
+      'Password change is ready for backend integration.',
+
+    'protectionOverview.guest': 'Basic protection',
+    'consent.formTitle': 'Consent to full protection',
+    'consent.formIntro':
+      'Full protection means the Fornect device inspects the encrypted (HTTPS) traffic of this device. That requires explicit consent, which is recorded.',
+    'consent.guardianName': 'Full name of the person giving consent',
+    'consent.guardianRelation': 'Relationship to the device user',
+    'consent.relationPlaceholder':
+      'e.g. parent, guardian, device owner',
+    'consent.isMinor': 'This device is used by a minor',
+    'consent.acceptPolicy':
+      'I have read and accept the traffic inspection policy',
+    'consent.scopeNote':
+      'Consent applies to this device only and can be withdrawn at any time.',
+    'consent.cancel': 'Cancel',
+    'consent.submit': 'Give consent',
+    'consent.errorFields':
+      'Enter the name and the relationship to the device user.',
+    'consent.errorPolicy':
+      'You must accept the policy to continue.',
+    'consent.errorServer':
+      'The action failed. Check your connection and try again.',
+    'consent.failedByUser':
+      'The user reported that installation did not succeed.',
+    'consent.reacceptTitle': 'The policy has changed',
+    'consent.reacceptBody':
+      'The terms the consent was given under have since changed. To keep full protection in effect, the policy needs to be accepted again.',
+    'consent.reacceptButton': 'Review and accept',
+    'consent.recordLabel': 'CONSENT RECORD',
+    'consent.grantedAt': 'Given',
+    'consent.policyVersion': 'Policy version',
+    'consent.proof': 'Confirmation',
+    'consent.proofManual':
+      'Confirmed manually (not technically verified)',
+    'consent.proofVerified': 'Technically verified on the device',
+    'consent.minorNote':
+      'It is recorded that the device is used by a minor and that a guardian gave consent.',
+    'consent.revoke': 'Withdraw consent',
+    'consent.guestNote':
+      'This device currently uses basic protection. Consent was withdrawn earlier, or never given.',
+    'consent.startWithConsent': 'Continue with consent',
+    'consent.removeCertTitle':
+      'Remove the certificate from the device',
+    'consent.removeCertBody':
+      'Inspection has stopped, but the Fornect certificate is still installed on the device and that device still trusts it. Remove it:',
+    'consent.removeCertAndroid':
+      'Android: Settings → Security → Certificates → delete Fornect (and separately in Firefox, if you use it).',
+    'consent.removeCertIos':
+      'iPhone and iPad: Settings → General → VPN & Device Management → remove the Fornect profile.',
+    'consent.removeCertDesktop':
+      'Computer: open certificate management and delete Fornect from trusted authorities, and from the browser itself if it keeps its own list.',
+    'consent.downloadCertificate': 'Download certificate',
+    'consent.fingerprintLabel': 'CERTIFICATE FINGERPRINT',
+    'consent.fingerprintHint':
+      'Compare this fingerprint with the one shown on the device during installation. If they differ, stop the installation.',
+    'consent.fingerprintPending':
+      'The fingerprint will appear once the Fornect device is connected — until then there is nothing to compare against.',
+    'consent.verificationPending':
+      'Once the Fornect device is connected, installation is verified automatically. Until then confirm manually — such a confirmation is recorded as unverified.',
+    'consent.consentStillValid':
+      'Consent remains valid — only the certificate installation is repeated.'
   }
 };
 
