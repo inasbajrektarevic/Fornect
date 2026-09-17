@@ -10,6 +10,7 @@ import { authenticateAccount } from '../plugins/authenticate-account';
 import { hashPassword, verifyPassword } from '../services/passwords';
 import { signAccountToken } from '../services/jwt';
 import { sendMail, verificationMail } from '../services/mailer';
+import { isKnownTimeZone } from '../services/schedule-window';
 
 import {
   generateVerificationCode,
@@ -26,6 +27,8 @@ interface RegisterBody {
   name?: string;
   email?: string;
   password?: string;
+  /** IANA zona iz pregledača; koristi je server pri računu rasporeda. */
+  timezone?: string;
 }
 
 interface LoginBody {
@@ -78,7 +81,7 @@ async function issueVerificationCode(accountId: string, email: string): Promise<
 
 export async function authRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{ Body: RegisterBody }>('/register', async (request, reply) => {
-    const { name, email, password } = request.body ?? {};
+    const { name, email, password, timezone } = request.body ?? {};
 
     if (!name || !email || !password) {
       return reply.code(400).send({ error: 'name, email i password su obavezni.' });
@@ -100,11 +103,17 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
 
     const passwordHash = await hashPassword(password);
 
+    // Zona koju pregledač pošalje se provjerava prije upisa: nepoznata
+    // vrijednost bi kasnije tiho pokvarila račun "u vrijeme rasporeda",
+    // a to je greška koja se ne vidi dok se ne desi.
+    const resolvedTimeZone =
+      timezone && isKnownTimeZone(timezone) ? timezone : 'Europe/Sarajevo';
+
     const { rows } = await pool.query<AccountRow>(
-      `INSERT INTO accounts (name, email, password_hash)
-       VALUES ($1, $2, $3)
+      `INSERT INTO accounts (name, email, password_hash, timezone)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [name.trim(), normalizedEmail, passwordHash],
+      [name.trim(), normalizedEmail, passwordHash, resolvedTimeZone],
     );
 
     const account = rows[0]!;

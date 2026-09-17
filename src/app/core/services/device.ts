@@ -72,6 +72,15 @@ export interface FornectNetworkDevice {
    * najbliže tome što imamo — koristi ga red "Novi uređaji".
    */
   createdAt?: string;
+  /**
+   * Da li je uređaj izvan onoga što licenca hub-a pokriva. Računa ga
+   * server pri čitanju liste, po redoslijedu pojavljivanja — panel ga
+   * samo prikazuje. Nalog bez uparenog hub-a nema licencu, pa nema ni
+   * prekoračenja.
+   */
+  overCapacity?: boolean;
+  /** Koje je po redu mjesto uređaj zauzeo (1 = prvi zavedeni). */
+  licenceSlot?: number;
 }
 
 interface NetworkDeviceApiRow {
@@ -91,6 +100,8 @@ interface NetworkDeviceApiRow {
   alert_when_offline: boolean | null;
   schedule: DeviceSchedule | null;
   created_at: string;
+  over_capacity?: boolean;
+  licence_slot?: number;
 }
 
 // Polja koja backend ne poznaje uopšte (nema ih u network_devices
@@ -186,6 +197,17 @@ export class DeviceService {
    */
   readonly unclassifiedDevices = computed(() =>
     this.devices().filter((device) => device.pairingState === 'unpaired'),
+  );
+
+  /**
+   * Uređaji koje licenca hub-a više ne pokriva.
+   *
+   * Do sada je panel granicu računao sam, iz zakucane vrijednosti koja
+   * je postojala i kad nalog nema nijedan hub — dakle izmišljao je
+   * limit. Sada je izvor istine hub: nema hub-a, nema ni limita.
+   */
+  readonly overCapacityDevices = computed(() =>
+    this.devices().filter((device) => device.overCapacity === true),
   );
 
   /**
@@ -536,6 +558,8 @@ export class DeviceService {
       alertWhenOffline: row.alert_when_offline ?? undefined,
       schedule: normalizeSchedule(row.schedule) ?? this.defaultSchedule,
       createdAt: row.created_at,
+      overCapacity: row.over_capacity === true,
+      licenceSlot: row.licence_slot,
       ...this.loadLocalOnlyFields(row.id),
     };
   }

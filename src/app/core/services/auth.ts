@@ -85,6 +85,11 @@ export class AuthService {
           name: trimmedName,
           email: normalizedEmail,
           password,
+          // Server po ovoj zoni računa da li je uređaj napustio mrežu
+          // "u vrijeme rasporeda". Bez nje bi računao po svom vremenu
+          // (produkcija je u UTC-u) i noćni odlazak u 21:30 vidio kao
+          // 19:30, dakle prije početka rasporeda.
+          timezone: detectTimeZone(),
         }),
       );
     } catch (error) {
@@ -233,4 +238,13 @@ function isHttpStatus(error: unknown, status: number): boolean {
     'status' in error &&
     (error as { status?: number }).status === status
   );
+}
+
+/** IANA zona pregledača, sa padom nazad ako je okruženje ne zna. */
+function detectTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Sarajevo';
+  } catch {
+    return 'Europe/Sarajevo';
+  }
 }

@@ -59,7 +59,7 @@ export class ProDashboard {
   }
 
   get unreadNotifications(): number {
-    return this.notificationService.getUnreadCount();
+    return this.notificationService.unreadCount();
   }
 
   get modeLabelKey(): string {

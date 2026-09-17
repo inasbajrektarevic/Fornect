@@ -9,6 +9,14 @@ import { pool } from '../db';
 import { authenticateDevice } from '../plugins/authenticate-device';
 import { generateDeviceToken, hashDeviceToken } from '../services/device-tokens';
 import { generatePairingCode, PAIRING_CODE_TTL_MINUTES } from '../services/hub-pairing';
+
+import {
+  getAccountTimeZone,
+  recordPresenceChange,
+  syncCapacityNotice,
+  type PresenceDeviceRow,
+} from '../services/notifications';
+
 import type { DeviceRow } from '../types';
 
 interface RegisterBody {
@@ -29,6 +37,14 @@ interface ConfigAckBody {
 interface CaBody {
   certificate_pem?: string;
   fingerprint_sha256?: string;
+}
+
+interface PresenceBody {
+  macs?: unknown;
+}
+
+interface PresenceRow extends PresenceDeviceRow {
+  mac_address: string;
 }
 
 export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
@@ -136,6 +152,94 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
       );
 
       return reply.send({ ok: true, received_at: new Date().toISOString() });
+    },
+  );
+
+  // Hub javlja koje MAC adrese trenutno vidi na mreži.
+  //
+  // Ovo je jedini put kojim obavještenje o odlasku sa mreže može
+  // nastati dok je aplikacija zatvorena — a to je bio cijeli smisao
+  // funkcije. Dok Zadatak 2 ne isporuči agenta koji ovo šalje,
+  // prisutnost i dalje javlja panel, pa obavještenje nastaje tek kad
+  // neko otvori aplikaciju. Ruta postoji da taj dan ne traži izmjenu
+  // ni u jednom drugom fajlu — samo da hub počne slati.
+  fastify.post<{ Params: { id: string }; Body: PresenceBody }>(
+    '/:id/network-presence',
+    { preHandler: authenticateDevice },
+    async (request, reply) => {
+      const hub = request.device!;
+
+      const reported = request.body?.macs;
+
+      if (!Array.isArray(reported)) {
+        return reply.code(400).send({ error: 'macs mora biti niz MAC adresa.' });
+      }
+
+      if (!hub.claimed_by_account_id) {
+        return reply
+          .code(409)
+          .send({ error: 'Uređaj još nije uparen ni sa jednim nalogom.' });
+      }
+
+      const accountId = hub.claimed_by_account_id;
+
+      const present = new Set(
+        reported
+          .filter((mac): mac is string => typeof mac === 'string')
+          .map((mac) => mac.trim().toLowerCase()),
+      );
+
+      const client = await pool.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        // FOR UPDATE: prijelaz se računa iz stanja koje se u istoj
+        // transakciji mijenja, pa dvije prijave koje stignu jedna
+        // preko druge ne mogu obje vidjeti "bio je online".
+        const { rows: devices } = await client.query<PresenceRow>(
+          `SELECT id, name, profile, online, alert_when_offline, schedule, mac_address
+           FROM network_devices
+           WHERE account_id = $1 AND fornect_device_id = $2
+           FOR UPDATE`,
+          [accountId, hub.id],
+        );
+
+        const timeZone = await getAccountTimeZone(client, accountId);
+
+        let changed = 0;
+
+        for (const before of devices) {
+          const online = present.has(before.mac_address.trim().toLowerCase());
+
+          if (online === before.online) {
+            continue;
+          }
+
+          await client.query('UPDATE network_devices SET online = $2 WHERE id = $1', [
+            before.id,
+            online,
+          ]);
+
+          await recordPresenceChange(client, accountId, timeZone, before, {
+            ...before,
+            online,
+          });
+
+          changed += 1;
+        }
+
+        await syncCapacityNotice(client, accountId);
+
+        await client.query('COMMIT');
+
+        return reply.send({ ok: true, devices: devices.length, changed });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   );
 

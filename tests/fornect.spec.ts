@@ -228,10 +228,21 @@ async function seedAccount(
 
       // 'online' nije podržan na POST-u (samo PATCH) — vidi
       // server/src/routes/network-devices.ts CREATABLE_FIELDS.
-      if (spec.online) {
+      //
+      // Svaki uređaj prvo dođe na mrežu, pa tek onda nestane ako tako
+      // treba. Tako je i u stvarnosti: hub ga vidi, pa prestane. Od
+      // migracije 012 obavještenje o odlasku nastaje iz PROMJENE
+      // stanja, a ne iz zatečenog — uređaj koji nikad nije bio viđen
+      // nije nikoga ni napustio.
+      await page.request.patch(`/api/v1/app/network-devices/${created.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { online: true },
+      });
+
+      if (!spec.online) {
         await page.request.patch(`/api/v1/app/network-devices/${created.id}`, {
           headers: { Authorization: `Bearer ${token}` },
-          data: { online: true },
+          data: { online: false },
         });
       }
     }
@@ -922,4 +933,314 @@ test('24 - unclassified devices are queued for a decision', async ({ page }) => 
   await page.reload();
 
   await expect(page.locator('.queue-item')).toHaveCount(2);
+});
+
+// Zadatak 1, Oblast C trazi da se domet zastite navede iskreno, sa
+// stvarnim brojkama i granicama. Alen to vezuje za njemacki UWG i
+// rizik od Abmahnunga, pa ovo nije kozmetika nego pravna izlozenost —
+// test postoji da tvrdnja ne moze tiho nestati iz teksta.
+test('25 - protection coverage is stated honestly, with limits', async ({ page }) => {
+  const seeded = await login(page);
+  await page.goto(`/devices/${seeded.deviceIds.iphone}/protection`);
+
+  const standard = levelOption(page, 'Standard Protection');
+  const full = levelOption(page, 'Full Protection');
+
+  await expect(standard).toContainText('64%');
+  await expect(full).toContainText('70–85%');
+
+  // Brojka bez granica je obecanje. Granice moraju stajati uz nju.
+  const note = page.locator('.coverage-note');
+
+  await expect(note).toContainText('No level stops everything');
+  await expect(note).toContainText('QUIC/HTTP3');
+
+  // Brojac blokiranih reklama mora reci sta NE broji.
+  await expect(page.locator('.ads-note')).toContainText('DNS level');
+
+  // Nigdje se ne smije tvrditi potpuna zastita.
+  await expect(page.getByText('100%')).toHaveCount(0);
+});
+
+// Obavjestenja su do sada zivjela u localStorage-u pregledaca i
+// nastajala tek kad bi neko otvorio listu. To je znacilo da funkcija
+// koju smo obecali ("javicemo kad uredjaj napusti mrezu") u stvari
+// nije radila: roditelj koji aplikaciju ne otvori nocu ne bi dobio
+// nista, a da se uredjaj do jutra vratio, obavjestenje ne bi ni
+// nastalo. Ovaj test cuva da se to ne vrati.
+test('26 - leaving the network during bedtime is recorded on the server', async ({
+  page,
+  browser,
+}) => {
+  const seeded = await login(page);
+  const { token, account } = await apiLogin(page, seeded.email);
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // Raspored se namjesta oko trenutnog vremena, da test ne zavisi od
+  // sata u kojem se pokrece. Svi dani su izabrani iz istog razloga.
+  const now = new Date();
+  const start = new Date(now.getTime() - 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 60 * 60 * 1000);
+
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  await page.request.patch(`/api/v1/app/network-devices/${seeded.deviceIds.iphone}`, {
+    headers,
+    data: {
+      schedule: {
+        enabled: true,
+        mode: 'sameEveryDay',
+        startHour: pad(start.getHours()),
+        startMinute: pad(start.getMinutes()),
+        endHour: pad(end.getHours()),
+        endMinute: pad(end.getMinutes()),
+        days: WEEK_ORDER.map((label) => ({
+          label,
+          selected: true,
+          startHour: pad(start.getHours()),
+          startMinute: pad(start.getMinutes()),
+          endHour: pad(end.getHours()),
+          endMinute: pad(end.getMinutes()),
+        })),
+      },
+    },
+  });
+
+  // Uredjaj nestaje sa mreze. Nista vise nije otvoreno u pregledacu
+  // sto bi obavjestenje moglo napraviti - pravi ga server.
+  await page.request.patch(`/api/v1/app/network-devices/${seeded.deviceIds.iphone}`, {
+    headers,
+    data: { online: false },
+  });
+
+  await page.goto('/notifications');
+
+  await expect(
+    page.getByText('Device left the network during bedtime'),
+  ).toBeVisible();
+
+  await expect(page.getByText("Amar's iPhone").first()).toBeVisible();
+
+  // Vrijeme je stvarno, a ne dio teksta. Ranije je pisalo "1 hour ago"
+  // i sedmicu kasnije.
+  await expect(page.locator('.notification-time').first()).toHaveText(
+    /just now|\d+ min ago|today at \d{2}:\d{2}/,
+  );
+
+  await expect(page.getByText('1 hour ago')).toHaveCount(0);
+
+  // Dokaz da zapis nije u pregledacu: drugi kontekst, prazan
+  // localStorage, u njega se upisuje samo sesija - a obavjestenje je
+  // i dalje tu.
+  const fresh = await browser.newContext();
+  const freshPage = await fresh.newPage();
+
+  await freshPage.goto('/login');
+
+  await freshPage.evaluate(
+    ({ sessionJson, accountId }) => {
+      localStorage.clear();
+      localStorage.setItem('fornect-auth-session', sessionJson);
+      localStorage.setItem(
+        `fornect-account-preferences-${accountId}`,
+        JSON.stringify({ language: 'en' }),
+      );
+    },
+    {
+      sessionJson: JSON.stringify({
+        token,
+        user: {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          accountId: account.id,
+        },
+      }),
+      accountId: account.id,
+    },
+  );
+
+  await freshPage.goto('/notifications');
+
+  await expect(
+    freshPage.getByText('Device left the network during bedtime'),
+  ).toBeVisible();
+
+  await fresh.close();
+});
+
+// Zadatak 1, Tacka 4, sloj L1: licenca hub-a pokriva odredjen broj
+// uredjaja. Do sada je panel na to samo upozoravao trakom, i to po
+// granici koju je sam izmislio - zakucanih 20, cak i za nalog koji
+// nema nijedan hub. Sada granicu daje hub, a server racuna ko je
+// preko nje.
+//
+// NAPOMENA: ovaj test registruje hub preko /devices/register, koji je
+// ogranicen na 10 poziva po satu po IP-u (zastita od neovlastenog
+// registrovanja uredjaja). Ako se cijeli suite pokrene vise od deset
+// puta u sat vremena, ovaj test ce pasti na 429 - to nije greska u
+// kodu nego bas ta zastita.
+test('27 - devices beyond the licence are named, and a freed slot is noticed', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // Hub sa kapacitetom 2, uparen sa ovim nalogom. Nalog vec ima 4
+  // uredjaja, dakle dva su preko licence.
+  const registerResponse = await page.request.post('/api/v1/devices/register', {
+    data: { name: 'Test hub', kind: 'home', mode: 'home', capacity: 2 },
+  });
+
+  const hub: { pairing_code: string } = await registerResponse.json();
+
+  const claimResponse = await page.request.post('/api/v1/app/hub/claim', {
+    headers,
+    data: { pairing_code: hub.pairing_code },
+  });
+
+  expect(claimResponse.ok()).toBeTruthy();
+
+  await page.goto('/devices');
+
+  await expect(page.getByText('Licence capacity exceeded')).toBeVisible();
+
+  await page.getByRole('link', { name: 'See details' }).click();
+
+  await expect(page).toHaveURL(/\/capacity$/);
+
+  await expect(page.getByText('Beyond the licence: 2')).toBeVisible();
+
+  const overflow = page.locator('.overflow-list');
+
+  // Preko licence su dva najkasnije zavedena uredjaja, a ne bilo koja
+  // dva - redoslijed pojavljivanja odlucuje ko je unutra.
+  await expect(overflow).toContainText('PlayStation 5');
+  await expect(overflow).toContainText('Unknown device');
+  await expect(overflow).not.toContainText("Amar's iPhone");
+
+  // Granica se ne smije precutati: uredjaj preko licence i dalje radi
+  // na mrezi, samo ga Fornect ne stiti.
+  await expect(
+    page.getByText('The panel does not remove a device from the network', {
+      exact: false,
+    }),
+  ).toBeVisible();
+
+  // Prekoracenje se racuna, a ne pamti: brisanje jednog uredjaja
+  // oslobadja mjesto i sljedeci ulazi u licencu.
+  const deleteResponse = await page.request.delete(
+    `/api/v1/app/network-devices/${seeded.deviceIds.iphone}`,
+    { headers },
+  );
+
+  expect(deleteResponse.ok()).toBeTruthy();
+
+  await page.goto('/capacity');
+
+  await expect(page.getByText('Beyond the licence: 1')).toBeVisible();
+});
+
+// Kontrakt iz Zadatka 1, Tacka 5: hub salje evente ka cloud-u i oni su
+// ULAZ za red "Novi uredjaji". Red je postojao od ranije, ali ga je
+// punio iskljucivo panel — hub je mogao vidjeti nepoznat uredjaj na
+// mrezi a da vlasnik za njega nikad ne sazna.
+//
+// NAPOMENA, ista kao kod testa 27: i ovaj test registruje hub preko
+// /devices/register, koji dozvoljava 10 poziva po satu po IP-u. Dva
+// testa znace da suite smije proci pet puta u sat vremena prije nego
+// pocnu 429 greske. To nije greska u kodu nego ta zastita.
+test('28 - the hub can report a new device, and a repeat does not duplicate it', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const registerResponse = await page.request.post('/api/v1/devices/register', {
+    data: { name: 'Event hub', kind: 'home', mode: 'home' },
+  });
+
+  const hub: { id: string; token: string; pairing_code: string } =
+    await registerResponse.json();
+
+  await page.request.post('/api/v1/app/hub/claim', {
+    headers,
+    data: { pairing_code: hub.pairing_code },
+  });
+
+  const hubHeaders = { Authorization: `Bearer ${hub.token}` };
+  const mac = '02:00:00:00:09:01';
+
+  const newDeviceEvent = {
+    event_id: 'ev-new-1',
+    type: 'device.new',
+    mac,
+    name: 'Kuhinjski tablet',
+    device_type: 'unknown',
+    at: new Date().toISOString(),
+  };
+
+  const first = await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: { events: [newDeviceEvent] },
+  });
+
+  expect((await first.json()).results[0].status).toBe('applied');
+
+  // Mreza pada, pa uredjaj koji ne dobije odgovor MORA smjeti poslati
+  // isto ponovo. Drugi put se prepoznaje kao ponavljanje.
+  const again = await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: { events: [newDeviceEvent] },
+  });
+
+  expect((await again.json()).results[0].status).toBe('duplicate');
+
+  await page.goto('/new-devices');
+
+  await expect(page.getByText('Kuhinjski tablet')).toHaveCount(1);
+
+  // Uredjaj sa praznim pristankom ne smije proci: prazan potpis je
+  // gori od nikakvog, jer izgleda kao dokaz a nije.
+  const emptyConsent = await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: {
+      events: [
+        {
+          event_id: 'ev-bad-1',
+          type: 'device.classified',
+          mac,
+          state: 'consented',
+          consent: {},
+        },
+      ],
+    },
+  });
+
+  expect((await emptyConsent.json()).results[0].status).toBe('rejected');
+
+  // Izjasnjavanje kroz portal skida uredjaj sa reda.
+  await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: {
+      events: [
+        {
+          event_id: 'ev-class-1',
+          type: 'device.classified',
+          mac,
+          state: 'guest',
+          method: 'portal',
+        },
+      ],
+    },
+  });
+
+  await page.goto('/new-devices');
+
+  await expect(page.getByText('Kuhinjski tablet')).toHaveCount(0);
 });

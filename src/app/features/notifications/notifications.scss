@@ -227,3 +227,23 @@
     min-height: 44px;
   }
 }
+
+/* Prazna lista nije greška nego uobičajeno stanje: obavještenje
+   nastaje samo kad se nešto stvarno desi. Zato ima svoj tekst,
+   umjesto praznog prostora koji izgleda kao da se nešto nije
+   učitalo. */
+.notifications-empty {
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.notifications-empty h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.notifications-empty p {
+  margin: 0;
+  color: var(--fn-muted);
+  line-height: 1.6;
+}

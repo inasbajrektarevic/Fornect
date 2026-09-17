@@ -304,11 +304,34 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Upari Fornect uređaj',
 
     'devices.limitReachedTitle':
-      'Dostignut je limit uređaja',
+      'Kapacitet licence je prekoračen',
     'devices.limitReachedDescription':
-      'Fornect Home trenutno podržava najviše {limit} uređaja. Možete nastaviti upravljati postojećim uređajima, ali novi uređaj se ne može dodati.',
-    'devices.contactSupport':
-      'Kontaktiraj podršku',
+      'Licenca vašeg Fornect uređaja pokriva {limit} uređaja. Preko toga ih je {count} — oni rade na mreži, ali ih Fornect ne štiti.',
+    'devices.limitReachedAction':
+      'Pogledaj detalje',
+
+    'capacity.eyebrow': 'LICENCA',
+    'capacity.title': 'Kapacitet je pun',
+    'capacity.subtitle':
+      'Uređaja na mreži: {used}. Licenca pokriva {capacity}.',
+    'capacity.whatItMeans': 'Šta ovo znači',
+    'capacity.explanation':
+      'Licenca vašeg Fornect uređaja pokriva određen broj uređaja. Oni koji su se pojavili poslije tog broja ostaju na mreži, ali ih Fornect ne štiti — ne filtrira im saobraćaj i ne primjenjuje profil ni raspored.',
+    'capacity.notBlockedNote':
+      'Panel ne isključuje uređaj sa mreže. Blokada na nivou mreže je posao samog Fornect uređaja; ovdje samo vidite ko je ostao izvan zaštite.',
+    'capacity.overflowTitle': 'Izvan licence: {count}',
+    'capacity.slot': 'Mjesto',
+    'capacity.openDevice': 'Otvori uređaj',
+    'capacity.freeUpSlot': 'Oslobodi mjesto',
+    'capacity.upgrade': 'Proširi licencu',
+    'capacity.contact': 'Kontaktiraj podršku',
+    'capacity.okTitle': 'Kapacitet nije pun',
+    'capacity.okBody':
+      'Na mreži je {used} uređaja, a licenca pokriva {capacity}. Svi su unutar zaštite.',
+    'capacity.noHubTitle': 'Nema uparenog Fornect uređaja',
+    'capacity.noHubBody':
+      'Licenca dolazi sa Fornect uređajem. Dok nijedan nije uparen sa ovim nalogom, nema ni granice koju bi panel mogao provjeriti.',
+    'capacity.allDevices': 'Svi uređaji',
     'deviceDetails.device': 'Uređaj',
     'deviceDetails.subtitle':
       'Upravljajte profilom, zaštitom i pristupom internetu.',
@@ -432,12 +455,12 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'deviceSetup.standardProtection':
       'Standardna zaštita',
     'deviceSetup.standardDescription':
-      'DNS filtriranje i osnovna mrežna zaštita',
+      'DNS filtriranje — oko 64% poznatih domena za reklame i praćenje',
 
     'deviceSetup.fullProtection':
       'Puna zaštita',
     'deviceSetup.fullDescription':
-      'Napredna zaštita uz Fornect zaštitni profil',
+      'Uz zaštitni profil — 70–85% zahtjeva, ali nikad sve',
 
     'deviceSetup.cancel': 'Odustani',
     'deviceSetup.finish': 'Završi podešavanje',
@@ -511,9 +534,13 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'protection.full': 'Puna zaštita',
     'protection.standard': 'Standardna zaštita',
     'protection.fullDescription':
-      'Napredna zaštita za uparene uređaje sa instaliranim Fornect zaštitnim profilom.',
+      'DNS filtriranje uz pregled web saobraćaja. Zaustavlja 70–85% zahtjeva za reklame i praćenje. Traži instaliran zaštitni profil.',
+    'protection.coverageNote':
+      'Nijedan nivo ne zaustavlja sve. Aplikacije koje zaobilaze sistemski pregled, QUIC/HTTP3 saobraćaj i servisi sa ugrađenim certifikatom uvijek propuste dio. Navedene brojke su iz mjerenja, ne obećanje.',
+    'protection.adsBlockedNote':
+      'Broji zahtjeve zaustavljene na DNS nivou. Reklame unutar aplikacija i u video sadržaju se ovako ne vide.',
     'protection.standardDescription':
-      'DNS filtriranje i osnovna mrežna zaštita. Certifikat nije potreban.',
+      'Filtriranje na nivou DNS-a. Zaustavlja oko 64% poznatih domena za reklame i praćenje. Certifikat nije potreban.',
     'protection.levelSectionLabel': 'NIVO ZAŠTITE',
     'protection.levelOff': 'Isključeno',
     'protection.levelOffDescription':
@@ -579,38 +606,21 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'notifications.markAll': 'Označi sve kao pročitano',
     'notifications.markRead': 'Označi kao pročitano',
 
-    'notifications.deviceOffline': 'Uređaj je offline',
-    'notifications.playstationOffline':
-      'PlayStation 5 je offline već 18 minuta.',
+    'notifications.justNow': 'upravo sada',
+    'notifications.minutesAgo': 'prije {minutes} min',
+    'notifications.todayAt': 'danas u {time}',
+    'notifications.yesterdayAt': 'jučer u {time}',
+    'notifications.onDateAt': '{date} u {time}',
 
-    'notifications.updateAvailable':
-      'Dostupno je ažuriranje sistema',
-    'notifications.updateReady':
-      'Fornect Home softver v0.1.1 je spreman za instalaciju.',
-
-    'notifications.protectionActivity':
-      'Aktivnost zaštite',
-    'notifications.adsBlocked':
-      'Danas je blokirano 128 reklama.',
-
-    'notifications.protectionActive':
-      'Zaštita je aktivna',
-    'notifications.networkProtected':
-      'Vaš Fornect Home uređaj je povezan i štiti vašu mrežu.',
-
-    'notifications.upToDate':
-      'Sistem je ažuriran',
-    'notifications.runningNormally':
-      'Vaš Fornect Home softver radi normalno.',
+    'notifications.emptyTitle': 'Nema obavijesti',
+    'notifications.emptyMessage':
+      'Ovdje će se pojaviti kad se nešto desi — na primjer kad uređaj napusti mrežu u vrijeme kada bi trebao spavati.',
 
     'notifications.capacityReached':
       'Dostignut je limit kapaciteta',
     'notifications.capacityMessage':
       'Vaš Fornect uređaj podržava najviše {capacity} uređaja. Novi uređaji se neće moći dodati dok se neki ne ukloni.',
 
-    'notifications.time18Minutes': 'prije 18 min',
-    'notifications.time1Hour': 'prije 1 sat',
-    'notifications.today': 'Danas',
     'newDevices.eyebrow': 'MREŽA',
     'newDevices.title': 'Novi uređaji',
     'newDevices.subtitle':
@@ -629,7 +639,6 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'newDevices.bannerTitle': 'Novi uređaji čekaju odluku',
     'newDevices.bannerBody':
       'Pogledajte ih — među njima može biti i uređaj koji ne prepoznajete.',
-    'notifications.now': 'Sada',
 
     'notifications.deviceLeftNetwork':
       'Uređaj nije na mreži',
@@ -871,7 +880,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'help.protectionQuestion':
       'Koja je razlika između Standardne i Pune zaštite?',
     'help.protectionAnswer':
-      'Standardna zaštita koristi DNS i mrežnu zaštitu. Puna zaštita uključuje dodatni zaštitni profil i uparivanje certifikata.',
+      'Standardna zaštita filtrira na nivou DNS-a i zaustavlja oko 64% poznatih domena za reklame i praćenje. Puna zaštita uz instaliran zaštitni profil pregleda i web saobraćaj, pa doseže 70–85% zahtjeva. Nijedan nivo ne zaustavlja sve: aplikacije koje zaobilaze sistemski pregled, QUIC/HTTP3 saobraćaj i servisi sa ugrađenim certifikatom uvijek propuste dio.',
 
     'help.pairingQuestion':
       'Šta znači uparivanje zaštitnog profila?',
@@ -1317,11 +1326,34 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Pair Fornect device',
 
     'devices.limitReachedTitle':
-      'Device limit reached',
+      'Licence capacity exceeded',
     'devices.limitReachedDescription':
-      'Fornect Home currently supports up to {limit} devices. You can continue managing existing devices, but a new device cannot be added.',
-    'devices.contactSupport':
-      'Contact support',
+      'Your Fornect device licence covers {limit} devices. {count} are beyond it — they work on the network, but Fornect does not protect them.',
+    'devices.limitReachedAction':
+      'See details',
+
+    'capacity.eyebrow': 'LICENCE',
+    'capacity.title': 'Capacity is full',
+    'capacity.subtitle':
+      'Devices on the network: {used}. The licence covers {capacity}.',
+    'capacity.whatItMeans': 'What this means',
+    'capacity.explanation':
+      'Your Fornect device licence covers a set number of devices. Those that appeared after that number stay on the network, but Fornect does not protect them — their traffic is not filtered and no profile or schedule is applied.',
+    'capacity.notBlockedNote':
+      'The panel does not remove a device from the network. Blocking at the network level is the Fornect device’s job; here you only see who is left without protection.',
+    'capacity.overflowTitle': 'Beyond the licence: {count}',
+    'capacity.slot': 'Slot',
+    'capacity.openDevice': 'Open device',
+    'capacity.freeUpSlot': 'Free up a slot',
+    'capacity.upgrade': 'Extend the licence',
+    'capacity.contact': 'Contact support',
+    'capacity.okTitle': 'Capacity is not full',
+    'capacity.okBody':
+      'There are {used} devices on the network and the licence covers {capacity}. All of them are protected.',
+    'capacity.noHubTitle': 'No Fornect device paired',
+    'capacity.noHubBody':
+      'The licence comes with the Fornect device. Until one is paired with this account there is no limit for the panel to check.',
+    'capacity.allDevices': 'All devices',
     'deviceDetails.device': 'Device',
     'deviceDetails.subtitle':
       'Manage profile, protection and internet access.',
@@ -1445,12 +1477,12 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'deviceSetup.standardProtection':
       'Standard Protection',
     'deviceSetup.standardDescription':
-      'DNS filtering and basic network protection',
+      'DNS filtering — around 64% of known advertising and tracking domains',
 
     'deviceSetup.fullProtection':
       'Full Protection',
     'deviceSetup.fullDescription':
-      'Advanced protection with Fornect Protection Profile',
+      'With the protection profile — 70–85% of requests, but never all',
 
     'deviceSetup.cancel': 'Cancel',
     'deviceSetup.finish': 'Finish setup',
@@ -1524,9 +1556,13 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'protection.full': 'Full Protection',
     'protection.standard': 'Standard Protection',
     'protection.fullDescription':
-      'Advanced protection for paired devices with an installed Fornect protection profile.',
+      'DNS filtering plus inspection of web traffic. Stops 70–85% of advertising and tracking requests. Requires the installed protection profile.',
+    'protection.coverageNote':
+      'No level stops everything. Apps that bypass system inspection, QUIC/HTTP3 traffic and services with pinned certificates always let some through. The figures above come from measurements, not a promise.',
+    'protection.adsBlockedNote':
+      'Counts requests stopped at the DNS level. Advertising inside apps and inside video is not visible this way.',
     'protection.standardDescription':
-      'DNS filtering and basic network protection. No certificate is required.',
+      'Filtering at the DNS level. Stops around 64% of known advertising and tracking domains. No certificate needed.',
     'protection.levelSectionLabel': 'PROTECTION LEVEL',
     'protection.levelOff': 'Off',
     'protection.levelOffDescription':
@@ -1592,38 +1628,21 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'notifications.markAll': 'Mark all as read',
     'notifications.markRead': 'Mark as read',
 
-    'notifications.deviceOffline': 'Device offline',
-    'notifications.playstationOffline':
-      'PlayStation 5 has been offline for 18 minutes.',
+    'notifications.justNow': 'just now',
+    'notifications.minutesAgo': '{minutes} min ago',
+    'notifications.todayAt': 'today at {time}',
+    'notifications.yesterdayAt': 'yesterday at {time}',
+    'notifications.onDateAt': '{date} at {time}',
 
-    'notifications.updateAvailable':
-      'System update available',
-    'notifications.updateReady':
-      'Fornect Home software v0.1.1 is ready to install.',
-
-    'notifications.protectionActivity':
-      'Protection activity',
-    'notifications.adsBlocked':
-      '128 ads have been blocked today.',
-
-    'notifications.protectionActive':
-      'Protection active',
-    'notifications.networkProtected':
-      'Your Fornect Home device is connected and protecting your network.',
-
-    'notifications.upToDate':
-      'System is up to date',
-    'notifications.runningNormally':
-      'Your Fornect Home software is running normally.',
+    'notifications.emptyTitle': 'No notifications',
+    'notifications.emptyMessage':
+      'They will show up here when something happens — for example when a device leaves the network during bedtime.',
 
     'notifications.capacityReached':
       'Capacity limit reached',
     'notifications.capacityMessage':
       'Your Fornect device supports up to {capacity} devices. New devices cannot be added until one is removed.',
 
-    'notifications.time18Minutes': '18 min ago',
-    'notifications.time1Hour': '1 hour ago',
-    'notifications.today': 'Today',
     'newDevices.eyebrow': 'NETWORK',
     'newDevices.title': 'New devices',
     'newDevices.subtitle':
@@ -1642,7 +1661,6 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'newDevices.bannerTitle': 'New devices need a decision',
     'newDevices.bannerBody':
       'Take a look — one of them may be a device you do not recognise.',
-    'notifications.now': 'Now',
 
     'notifications.deviceLeftNetwork':
       'Device is not on the network',
@@ -1884,7 +1902,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'help.protectionQuestion':
       'What is the difference between Standard and Full Protection?',
     'help.protectionAnswer':
-      'Standard Protection uses DNS and network protection. Full Protection adds a protection profile and certificate pairing.',
+      'Standard protection filters at the DNS level and stops around 64% of known advertising and tracking domains. Full protection, with the profile installed, also inspects web traffic and reaches 70–85% of requests. No level stops everything: apps that bypass system inspection, QUIC/HTTP3 traffic and services with pinned certificates always let some through.',
 
     'help.pairingQuestion':
       'What does protection profile pairing mean?',

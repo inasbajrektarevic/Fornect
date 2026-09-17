@@ -1,0 +1,94 @@
+/* Host mora biti blok: inače bi omotač bio inline element i margina
+   kartice ne bi radila kako je radila dok je kartica stajala direktno
+   u ekranu zaštite. */
+:host {
+  display: block;
+}
+
+.away-protection-card {
+  margin-bottom: 24px;
+  padding: 19px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border: 1px solid var(--fn-border);
+  border-radius: 15px;
+  background: #ffffff;
+}
+
+.away-protection-card--disabled {
+  background: var(--fn-bg);
+  opacity: 0.8;
+}
+
+/* Isti oblik natpisa kao na ostatku ekrana zaštite. Ponovljen ovdje
+   svjesno: stilovi komponente su zatvoreni, pa se ne nasljeđuje. */
+.card-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--fn-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.away-protection-card h3 {
+  margin: 5px 0 0;
+  color: var(--fn-ink);
+}
+
+.away-protection-card p {
+  max-width: 600px;
+  margin: 7px 0 0;
+  color: var(--fn-muted);
+  line-height: 1.5;
+}
+
+.away-protection-card small {
+  display: block;
+  margin-top: 8px;
+  color: #9a6c42;
+}
+
+.away-toggle {
+  min-width: 92px;
+  padding: 7px 10px 7px 7px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #d5dce6;
+  border-radius: 999px;
+  background: #e7ebf0;
+  color: #687487;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.away-toggle-thumb {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(23, 32, 51, 0.16);
+}
+
+.away-toggle--active {
+  border-color: var(--fn-orange);
+  background: var(--fn-orange);
+  color: #ffffff;
+}
+
+.away-toggle:disabled {
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .away-protection-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

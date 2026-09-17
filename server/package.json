@@ -10,7 +10,9 @@
     "start": "node dist/server.js",
     "migrate": "node scripts/migrate.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "simulate-hub": "node scripts/simulate-hub-ca.js"
+    "simulate-hub": "node scripts/simulate-hub-ca.js",
+    "simulate-presence": "node scripts/simulate-presence.js",
+    "simulate-events": "node scripts/simulate-events.js"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.1",

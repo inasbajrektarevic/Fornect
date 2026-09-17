@@ -34,7 +34,7 @@ export class Dashboard {
   };
 
   get unreadNotifications(): number {
-    return this.notificationService.getUnreadCount();
+    return this.notificationService.unreadCount();
   }
 
   /**

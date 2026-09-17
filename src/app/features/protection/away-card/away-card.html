@@ -1,0 +1,58 @@
+<div
+  class="away-protection-card"
+  [class.away-protection-card--disabled]="
+    !protectionEnabled()
+  ">
+
+  <div>
+    <span class="card-label">
+      {{ 'protection.awayTitle' | translate }}
+    </span>
+
+    <h3>
+      {{ 'protection.awayHeading' | translate }}
+    </h3>
+
+    <p>
+      {{
+        'protection.awayDescription'
+          | translate
+      }}
+    </p>
+
+    @if (!protectionEnabled()) {
+      <small>
+        {{
+          'protection.awayDisabled'
+            | translate
+        }}
+      </small>
+    }
+  </div>
+
+  <button
+    type="button"
+    class="away-toggle"
+    [class.away-toggle--active]="
+      enabled() &&
+      protectionEnabled()
+    "
+    [disabled]="!protectionEnabled()"
+    [attr.aria-pressed]="enabled()"
+    (click)="toggled.emit()">
+
+    <span class="away-toggle-thumb"></span>
+
+    <strong>
+      {{
+        (
+          !protectionEnabled()
+            ? 'protection.paused'
+            : enabled()
+              ? 'protection.on'
+              : 'protection.off'
+        ) | translate
+      }}
+    </strong>
+  </button>
+</div>

@@ -43,7 +43,6 @@ export class Devices {
     inject(HubService);
 
   // Kapacitet je svojstvo Fornect uređaja, ne ekrana.
-  // Home podržava do 20 uređaja, kako specifikacija kaže.
   get deviceLimit(): number {
     return this.hubService.hub().capacity;
   }
@@ -52,8 +51,18 @@ export class Devices {
     return this.deviceService.devices();
   }
 
+  /**
+   * Prekoračenje licence sada dolazi sa servera, koji ga računa iz
+   * kapaciteta uparenog hub-a. Ranije ga je ekran računao sam, iz
+   * vrijednosti koja je postojala i kad nalog nema nijedan hub — pa
+   * je granica bila izmišljena. Nema hub-a, nema ni limita.
+   */
   get deviceLimitReached(): boolean {
-    return this.devices.length >= this.deviceLimit;
+    return this.overCapacityCount > 0;
+  }
+
+  get overCapacityCount(): number {
+    return this.deviceService.overCapacityDevices().length;
   }
 
   get onlineCount(): number {

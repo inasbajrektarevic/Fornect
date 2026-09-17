@@ -7,10 +7,12 @@ import { authenticateAccount } from './plugins/authenticate-account';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { consentRoutes } from './routes/consent';
+import { deviceEventRoutes } from './routes/device-events';
 import { deviceRoutes } from './routes/devices';
 import { healthRoutes } from './routes/health';
 import { hubRoutes } from './routes/hub';
 import { networkDeviceRoutes } from './routes/network-devices';
+import { notificationRoutes } from './routes/notifications';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -31,6 +33,11 @@ export function buildApp() {
   // Uređaji (Orange Pi agent) — Bearer token autentifikacija po ruti.
   app.register(deviceRoutes, { prefix: '/api/v1/devices' });
 
+  // Eventi koje hub šalje ka cloud-u (Zadatak 1, Tačka 5). Isti
+  // prefiks i ista device autentifikacija; odvojen fajl jer je to
+  // zaseban kontrakt, ne još jedna operacija nad uređajem.
+  app.register(deviceEventRoutes, { prefix: '/api/v1/devices' });
+
   // Interni admin panel — X-Admin-Key.
   app.register(adminRoutes, { prefix: '/api/v1/admin' });
 
@@ -45,6 +52,7 @@ export function buildApp() {
       appScope.addHook('preHandler', authenticateAccount);
 
       appScope.register(networkDeviceRoutes, { prefix: '/network-devices' });
+      appScope.register(notificationRoutes, { prefix: '/notifications' });
       appScope.register(hubRoutes);
 
       // Pristanak na presretanje. Bez prefiksa, jer sam definiše pune

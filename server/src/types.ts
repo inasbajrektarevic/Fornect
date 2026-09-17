@@ -32,6 +32,8 @@ export interface AccountRow {
   verification_code_expires_at: string | null;
   verification_attempts: number;
   verification_sent_at: string | null;
+  /** IANA zona naloga; server po njoj računa da li raspored traje. */
+  timezone: string;
   created_at: string;
 }
 

@@ -52,6 +52,13 @@ export const routes: Routes = [
       import('./features/new-devices/new-devices').then((m) => m.NewDevices),
   },
   {
+    // Bez homeModeGuard-a: kapacitet je pitanje licence, a ono
+    // pogađa i Pro naloge — tamo i više.
+    path: 'capacity',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/capacity/capacity').then((m) => m.Capacity),
+  },
+  {
     path: 'devices',
     canActivate: [authGuard],
     loadComponent: () => import('./features/devices/devices').then((m) => m.Devices),

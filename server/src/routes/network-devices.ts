@@ -10,6 +10,12 @@ import type { PoolClient } from 'pg';
 import { pool } from '../db';
 import { applyAutoGuestPolicy } from '../services/auto-guest';
 import { syncConsentedMacs } from '../services/device-config-sync';
+import {
+  getAccountTimeZone,
+  offlineAlertEnabled,
+  recordPresenceChange,
+  resolveOfflineNotices,
+} from '../services/notifications';
 
 interface NetworkDeviceRow {
   id: string;
@@ -29,6 +35,9 @@ interface NetworkDeviceRow {
   alert_when_offline: boolean | null;
   schedule: unknown;
   created_at: string;
+  /** Računa se pri čitanju liste (GET /), nije kolona u tabeli. */
+  licence_slot?: number;
+  over_capacity?: boolean;
 }
 
 interface CreateBody {
@@ -95,8 +104,36 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       // stati a da to niko ne primijeti.
       await applyAutoGuestPolicy(client, request.accountId!);
 
+      // Prekoračenje licence se NE pamti u koloni nego se računa pri
+      // čitanju, po redoslijedu pojavljivanja: prvih `capacity`
+      // uređaja je unutar licence, ostali su preko. Zapamćena zastava
+      // bi zastarjela čim vlasnik obriše neki uređaj — ovako se mjesto
+      // samo oslobodi.
+      //
+      // Nalog bez uparenog hub-a nema ni licencu, pa nema ni
+      // prekoračenja. Panel je do sada u tom slučaju prikazivao
+      // zakucanih "20", što je bila izmišljena granica.
       const { rows } = await client.query<NetworkDeviceRow>(
-        'SELECT * FROM network_devices WHERE account_id = $1 ORDER BY created_at DESC',
+        `WITH licence AS (
+           SELECT coalesce(d.capacity, 0) AS capacity
+           FROM devices d
+           WHERE d.claimed_by_account_id = $1
+           ORDER BY d.created_at ASC
+           LIMIT 1
+         ),
+         ranked AS (
+           SELECT nd.*,
+                  -- ::int jer bi bigint stigao u panel kao string.
+                  (row_number() OVER (ORDER BY nd.created_at ASC, nd.id ASC))::int
+                    AS licence_slot
+           FROM network_devices nd
+           WHERE nd.account_id = $1
+         )
+         SELECT ranked.*,
+                (coalesce((SELECT capacity FROM licence), 0) > 0
+                 AND ranked.licence_slot > (SELECT capacity FROM licence)) AS over_capacity
+         FROM ranked
+         ORDER BY ranked.created_at DESC`,
         [request.accountId],
       );
 
@@ -222,6 +259,24 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       const after = rows[0]!;
 
       await syncIfPairingChanged(client, before, after);
+
+      // Obavještenje o odlasku sa mreže nastaje ovdje, a ne u panelu
+      // pri otvaranju liste. Isti poziv radi i ruta kojom hub javlja
+      // prisutnost — da poruka ne zavisi od toga ko je promjenu javio.
+      if (before.online !== after.online) {
+        await recordPresenceChange(
+          client,
+          after.account_id,
+          await getAccountTimeZone(client, after.account_id),
+          before,
+          after,
+        );
+      }
+
+      // Isključeno praćenje skida i ono što o tom uređaju već stoji.
+      if (offlineAlertEnabled(before) && !offlineAlertEnabled(after)) {
+        await resolveOfflineNotices(client, after.account_id, after.id);
+      }
 
       await client.query('COMMIT');
 

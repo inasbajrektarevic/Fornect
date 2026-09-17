@@ -38,9 +38,12 @@ import {
   TranslatePipe
 } from '../../shared/pipes/translate';
 
+import { AwayCard } from './away-card/away-card';
+
 @Component({
   selector: 'app-protection',
   imports: [
+    AwayCard,
     FormsModule,
     RouterLink,
     TranslatePipe
