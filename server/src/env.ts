@@ -27,6 +27,19 @@ export const env = {
 
   deviceOnlineThresholdMinutes: Number(process.env['DEVICE_ONLINE_THRESHOLD_MINUTES'] ?? 15),
 
+  // Koliko puta po IP-u na sat se smije registrovati nov uređaj.
+  //
+  // Ruta je bez auth-a (uređaj još nema token), pa je ovo osnovna
+  // zaštita od neovlaštenog registrovanja dok se mrežni nivo (VPN,
+  // allowlist) ne postavi na VPS-u. NE dizati na produkciji.
+  //
+  // Podesivo je zato što u razvoju isti IP legitimno registruje mnogo
+  // hubova: svaki e2e test koji treba hub registruje svoj (registerHub
+  // u tests/fornect.spec.ts), pa sa 10 suite prođe otprilike jednom na
+  // sat. Broj testova se ovdje namjerno ne navodi — mijenja se, a
+  // komentar koji je govorio „tri" bio je netačan čim ih je bilo osam.
+  deviceRegisterMaxPerHour: Number(process.env['DEVICE_REGISTER_MAX_PER_HOUR'] ?? 10),
+
   // Nakon koliko sati se neklasifikovan uređaj sam svrstava među
   // goste (Zadatak 1, Tačka 5). Nula isključuje politiku.
   autoGuestAfterHours: Number(process.env['AUTO_GUEST_AFTER_HOURS'] ?? 24),

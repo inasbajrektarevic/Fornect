@@ -86,6 +86,12 @@
               "
               [class.notification-icon--capacity]="
                 notification.type === 'capacity'
+              "
+              [class.notification-icon--new-device]="
+                notification.type === 'new-device'
+              "
+              [class.notification-icon--consent]="
+                notification.type === 'consent'
               ">
 
               @switch (notification.type) {
@@ -103,6 +109,14 @@
 
                 @case ('capacity') {
                   ⚠
+                }
+
+                @case ('new-device') {
+                  ?
+                }
+
+                @case ('consent') {
+                  !
                 }
               }
             </div>

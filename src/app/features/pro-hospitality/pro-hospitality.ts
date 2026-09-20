@@ -1,9 +1,10 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../core/services/auth';
 import { HubService } from '../../core/services/hub';
+import { PortalSettingsService } from '../../core/services/portal-settings';
 import { TranslatePipe } from '../../shared/pipes/translate';
 
 interface SplashSettings {
@@ -21,10 +22,28 @@ interface SplashSettings {
 export class ProHospitality {
   private readonly authService = inject(AuthService);
   private readonly hubService = inject(HubService);
+  private readonly portalSettings = inject(PortalSettingsService);
+
+  // Aplikacija je zoneless: promjena običnog polja nakon `await` ne
+  // pokreće provjeru promjena sama od sebe, pa bi ekran ostao prazan
+  // iako su podaci stigli. Ista zamka kao na ekranu pristanka.
+  private readonly changeDetector = inject(ChangeDetectorRef);
 
   autoProtectGuests = this.loadAutoProtect();
 
-  splash: SplashSettings = this.loadSplash();
+  /**
+   * Isti podatak kao na ekranu "Tekst i brend portala" — ne kopija.
+   *
+   * Ranije je ovo bio zaseban zapis u localStorage-u, pa je hotel ovdje
+   * unosio tekst koji nigdje nije stizao, a na uređaju je stajalo nešto
+   * treće. Sad oba ekrana idu kroz PortalSettingsService; ovdje se vide
+   * samo tri polja, jer hotelu ostalo i ne treba.
+   */
+  splash: SplashSettings = {
+    headline: '',
+    message: '',
+    brandName: ''
+  };
 
   saved = false;
 
@@ -46,16 +65,31 @@ export class ProHospitality {
     );
   }
 
-  saveSplash(): void {
-    localStorage.setItem(
-      this.key('splash'),
-      JSON.stringify(this.splash)
-    );
+  constructor() {
+    void this.loadSplash();
+  }
+
+  async saveSplash(): Promise<void> {
+    // Hotel uređuje bosanski tekst; engleski se mijenja na ekranu
+    // "Tekst i brend portala", gdje stoje oba jezika.
+    const settings = await this.portalSettings.save({
+      brandName: this.splash.brandName,
+      welcomeTitleBs: this.splash.headline,
+      welcomeMessageBs: this.splash.message
+    });
+
+    this.splash = {
+      brandName: settings.brandName,
+      headline: settings.welcomeTitleBs,
+      message: settings.welcomeMessageBs
+    };
 
     this.saved = true;
+    this.changeDetector.markForCheck();
 
     window.setTimeout(() => {
       this.saved = false;
+      this.changeDetector.markForCheck();
     }, 2000);
   }
 
@@ -83,33 +117,19 @@ export class ProHospitality {
     }
   }
 
-  private loadSplash(): SplashSettings {
-    const saved = localStorage.getItem(
-      this.key('splash')
-    );
+  private async loadSplash(): Promise<void> {
+    await this.portalSettings.reload();
 
-    if (saved) {
-      try {
-        const splash =
-          JSON.parse(saved) as Partial<SplashSettings>;
+    const settings = this.portalSettings.settings();
 
-        return {
-          headline: splash.headline ?? 'Dobrodošli',
-          message:
-            splash.message ??
-            'Vaša veza je zaštićena Fornect uređajem.',
-          brandName: splash.brandName ?? 'Fornect'
-        };
-      } catch {
-        // Ide na podrazumijevane vrijednosti.
-      }
+    if (settings) {
+      this.splash = {
+        brandName: settings.brandName,
+        headline: settings.welcomeTitleBs,
+        message: settings.welcomeMessageBs
+      };
+
+      this.changeDetector.markForCheck();
     }
-
-    return {
-      headline: 'Dobrodošli',
-      message:
-        'Vaša veza je zaštićena Fornect uređajem.',
-      brandName: 'Fornect'
-    };
   }
 }

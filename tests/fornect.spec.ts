@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { test, expect, Page } from '@playwright/test';
@@ -89,6 +90,44 @@ async function apiLogin(page: Page, email: string): Promise<LoginApiResponse> {
   const response = await page.request.post('/api/v1/auth/login', {
     data: { email, password: PASSWORD },
   });
+
+  return response.json();
+}
+
+interface RegisteredHub {
+  id: string;
+  token: string;
+  pairing_code: string;
+}
+
+// Registracija huba za test.
+//
+// /devices/register je ogranicen po IP-u (DEVICE_REGISTER_MAX_PER_HOUR,
+// podrazumijevano 10) — to je zastita od neovlastenog registrovanja
+// uredjaja i ostaje takva. Testovi idu sa iste adrese, a hub registruje
+// njih osam, pa sa podrazumijevanom granicom suite prodje jednom na
+// sat.
+//
+// Zato ova funkcija provjerava odgovor ODMAH. Bez toga 429 izgleda kao
+// "Cannot read properties of undefined" pet redova kasnije, u sedam
+// testova odjednom, i trazi se greska u kodu koje nema.
+async function registerHub(
+  page: Page,
+  data: { name: string; kind?: string; mode?: string; capacity?: number },
+): Promise<RegisteredHub> {
+  const response = await page.request.post('/api/v1/devices/register', {
+    data: { kind: 'home', mode: 'home', ...data },
+  });
+
+  if (response.status() === 429) {
+    throw new Error(
+      'Registracija huba je odbijena (429): dostignut je DEVICE_REGISTER_MAX_PER_HOUR. ' +
+        'Za razvoj povecajte vrijednost u server/.env (npr. 1000) i restartujte backend — ' +
+        'restart i sam isprazni brojac.',
+    );
+  }
+
+  expect(response.status(), 'registracija huba').toBe(201);
 
   return response.json();
 }
@@ -960,6 +999,12 @@ test('25 - protection coverage is stated honestly, with limits', async ({ page }
 
   // Nigdje se ne smije tvrditi potpuna zastita.
   await expect(page.getByText('100%')).toHaveCount(0);
+
+  // Zadatak 1, Oblast C: kozmeticko filtriranje NIJE dio POC obecanja i
+  // mora stajati kao ogranicenje. Bez ovoga "blokiranih reklama: 128"
+  // korisnik cita kao "128 reklama nisam vidio", a DNS blokira zahtjev,
+  // ne uklanja element sa stranice.
+  await expect(page.getByText('ads are not removed from the page')).toBeVisible();
 });
 
 // Obavjestenja su do sada zivjela u localStorage-u pregledaca i
@@ -1076,11 +1121,8 @@ test('26 - leaving the network during bedtime is recorded on the server', async 
 // nema nijedan hub. Sada granicu daje hub, a server racuna ko je
 // preko nje.
 //
-// NAPOMENA: ovaj test registruje hub preko /devices/register, koji je
-// ogranicen na 10 poziva po satu po IP-u (zastita od neovlastenog
-// registrovanja uredjaja). Ako se cijeli suite pokrene vise od deset
-// puta u sat vremena, ovaj test ce pasti na 429 - to nije greska u
-// kodu nego bas ta zastita.
+// Hub se registruje kroz registerHub() — vidi tamo zasto, i sta uraditi
+// kad udari granica registracija po satu.
 test('27 - devices beyond the licence are named, and a freed slot is noticed', async ({
   page,
 }) => {
@@ -1091,11 +1133,7 @@ test('27 - devices beyond the licence are named, and a freed slot is noticed', a
 
   // Hub sa kapacitetom 2, uparen sa ovim nalogom. Nalog vec ima 4
   // uredjaja, dakle dva su preko licence.
-  const registerResponse = await page.request.post('/api/v1/devices/register', {
-    data: { name: 'Test hub', kind: 'home', mode: 'home', capacity: 2 },
-  });
-
-  const hub: { pairing_code: string } = await registerResponse.json();
+  const hub = await registerHub(page, { name: 'Test hub', capacity: 2 });
 
   const claimResponse = await page.request.post('/api/v1/app/hub/claim', {
     headers,
@@ -1122,10 +1160,11 @@ test('27 - devices beyond the licence are named, and a freed slot is noticed', a
   await expect(overflow).toContainText('Unknown device');
   await expect(overflow).not.toContainText("Amar's iPhone");
 
-  // Granica se ne smije precutati: uredjaj preko licence i dalje radi
-  // na mrezi, samo ga Fornect ne stiti.
+  // Granica se ne smije precutati, ali ni pogresno navesti. Zadatak 1,
+  // Tacka 4, sloj L1: limit se primjenjuje pri REGISTRACIJI uredjaja, u
+  // panelu — ne u DNS-u ni u proxyju.
   await expect(
-    page.getByText('The panel does not remove a device from the network', {
+    page.getByText('The limit is enforced when a device is registered', {
       exact: false,
     }),
   ).toBeVisible();
@@ -1149,10 +1188,8 @@ test('27 - devices beyond the licence are named, and a freed slot is noticed', a
 // punio iskljucivo panel — hub je mogao vidjeti nepoznat uredjaj na
 // mrezi a da vlasnik za njega nikad ne sazna.
 //
-// NAPOMENA, ista kao kod testa 27: i ovaj test registruje hub preko
-// /devices/register, koji dozvoljava 10 poziva po satu po IP-u. Dva
-// testa znace da suite smije proci pet puta u sat vremena prije nego
-// pocnu 429 greske. To nije greska u kodu nego ta zastita.
+// Hub se registruje kroz registerHub() — vidi tamo zasto, i sta uraditi
+// kad udari granica registracija po satu.
 test('28 - the hub can report a new device, and a repeat does not duplicate it', async ({
   page,
 }) => {
@@ -1161,12 +1198,7 @@ test('28 - the hub can report a new device, and a repeat does not duplicate it',
 
   const headers = { Authorization: `Bearer ${token}` };
 
-  const registerResponse = await page.request.post('/api/v1/devices/register', {
-    data: { name: 'Event hub', kind: 'home', mode: 'home' },
-  });
-
-  const hub: { id: string; token: string; pairing_code: string } =
-    await registerResponse.json();
+  const hub = await registerHub(page, { name: 'Event hub' });
 
   await page.request.post('/api/v1/app/hub/claim', {
     headers,
@@ -1243,4 +1275,609 @@ test('28 - the hub can report a new device, and a repeat does not duplicate it',
   await page.goto('/new-devices');
 
   await expect(page.getByText('Kuhinjski tablet')).toHaveCount(0);
+});
+
+// Stavka 1.2: tekst i brend portala se ureduju u panelu i STVARNO
+// stizu na uredjaj. Do sada je editor postojao samo za hospitality mod
+// i pisao u localStorage — korisnik unese tekst, vidi "sacuvano", a na
+// uredjaj ne ode nista.
+test('29 - portal text is edited in the panel and the hub pulls exactly that', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const hub = await registerHub(page, { name: 'Portal hub' });
+
+  await page.request.post('/api/v1/app/hub/claim', {
+    headers,
+    data: { pairing_code: hub.pairing_code },
+  });
+
+  const hubHeaders = { Authorization: `Bearer ${hub.token}` };
+
+  // Prazan naslov bi ostavio portal bez ijedne recenice objasnjenja.
+  const empty = await page.request.put('/api/v1/app/portal-settings', {
+    headers,
+    data: { welcome_title_bs: '   ' },
+  });
+
+  expect(empty.status()).toBe(400);
+
+  // Predugacak tekst se ne prima: ovo zavrsi na ekranu telefona iza
+  // captive portala.
+  const tooLong = await page.request.put('/api/v1/app/portal-settings', {
+    headers,
+    data: { welcome_title_bs: 'x'.repeat(200) },
+  });
+
+  expect(tooLong.status()).toBe(400);
+
+  await page.goto('/portal-branding');
+
+  await page.locator('input[name="brandName"]').fill('Hotel Neretva');
+  await page.locator('input[name="titleBs"]').fill('Dobrodošli u Hotel Neretva');
+
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await expect(page.getByText(/Devices will pick up version/)).toBeVisible();
+
+  // Pregled prikazuje ono sto je uneseno.
+  await expect(page.locator('.preview')).toContainText('Hotel Neretva');
+
+  // I ono sto je najvaznije: hub povlaci bas taj tekst.
+  const bundleResponse = await page.request.get(
+    `/api/v1/devices/${hub.id}/portal-bundle`,
+    { headers: hubHeaders },
+  );
+
+  const bundle = await bundleResponse.json();
+
+  expect(bundle.config.brandName).toBe('Hotel Neretva');
+  expect(bundle.config.welcomeTitle.bs).toBe('Dobrodošli u Hotel Neretva');
+
+  // Engleski nije diran, pa je ostao podrazumijevani — portal govori
+  // jezikom gosta i oba moraju postojati.
+  expect(bundle.config.welcomeTitle.en).toBe('Welcome to a protected network');
+
+  // Hub koji vec ima ovu verziju ne povlaci isti paket ponovo.
+  const unchanged = await page.request.get(
+    `/api/v1/devices/${hub.id}/portal-bundle?version=${bundle.version}`,
+    { headers: hubHeaders },
+  );
+
+  expect(unchanged.status()).toBe(304);
+});
+
+// Zadatak 1, Tacka 6: Fleet / OTA.
+//
+// Pomocna funkcija, jer sva tri testa ispod trebaju nalog sa uparenim
+// hub-om i jednim uredjajem na mrezi.
+async function seedHub(page: Page, email: string, token: string) {
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const hub = await registerHub(page, { name: 'Fleet hub', capacity: 10 });
+
+  await page.request.post('/api/v1/app/hub/claim', {
+    headers,
+    data: { pairing_code: hub.pairing_code },
+  });
+
+  // Jedan uparen uredjaj, da se vidi da OTA izmjena ne obrise MAC-ove.
+  await page.request.post('/api/v1/app/network-devices', {
+    headers,
+    data: {
+      mac_address: 'AA:BB:CC:00:11:22',
+      name: 'Telefon',
+      type: 'phone',
+      pairing_state: 'paired',
+    },
+  });
+
+  return { hub, headers, hubHeaders: { Authorization: `Bearer ${hub.token}` } };
+}
+
+test('30 - OTA settings reach the device without dropping consented MACs', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const { hub, headers, hubHeaders } = await seedHub(page, seeded.email, token);
+
+  const before = await (
+    await page.request.get(`/api/v1/devices/${hub.id}/config`, { headers: hubHeaders })
+  ).json();
+
+  // seedHub je uredjaj zaveo VELIKIM slovima; uredjaj dobija jedini
+  // oblik koji sistem cuva (services/mac.ts). Da ovdje stoje velika
+  // slova, hub bi dobio MAC koji ne odgovara onome sto sam vidi.
+  expect(before.config_json.consented_macs).toContain('aa:bb:cc:00:11:22');
+
+  await page.goto('/fleet');
+
+  // Prsten se bira klikom; ekran salje izmjenu odmah.
+  await page.getByRole('button', { name: 'First 5%', exact: true }).click();
+  await expect(page.getByText('Saved.')).toBeVisible();
+
+  const after = await (
+    await page.request.get(`/api/v1/devices/${hub.id}/config`, { headers: hubHeaders })
+  ).json();
+
+  expect(after.config_json.ota.ring).toBe('early');
+
+  // OVO je poenta testa. Config je JEDAN objekat koji uredjaj uzima
+  // cijeli; parcijalan upis OTA postavki bi tiho obrisao MAC adrese i
+  // uredjaj bi ostao bez zastite, bez ijedne greske u logu.
+  expect(after.config_json.consented_macs).toContain('aa:bb:cc:00:11:22');
+
+  // Verzija configa je porasla, jer se sadrzaj promijenio.
+  expect(after.version).toBeGreaterThan(before.version);
+
+  // Prozor odrzavanja nosi i vremensku zonu: "02:00 lokalno" uredjaju
+  // ne znaci nista bez nje.
+  expect(after.config_json.ota.maintenance_window.timezone).toBeTruthy();
+
+  // Isti config se ne upisuje ponovo — ponovni klik na isti prsten ne
+  // smije podici verziju.
+  await page.getByRole('button', { name: 'First 5%', exact: true }).click();
+
+  const again = await (
+    await page.request.get(`/api/v1/devices/${hub.id}/config`, { headers: hubHeaders })
+  ).json();
+
+  expect(again.version).toBe(after.version);
+
+  // Prozor nulte duzine nije prozor.
+  const zeroWindow = await page.request.put(`/api/v1/app/fleet/${hub.id}/ota`, {
+    headers,
+    data: { maintenance_start: '02:00', maintenance_end: '02:00' },
+  });
+
+  expect(zeroWindow.status()).toBe(400);
+});
+
+test('31 - a bad filter list set can be rolled back in one click', async ({ page }) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const { hub, headers, hubHeaders } = await seedHub(page, seeded.email, token);
+
+  // Lista preko obicnog http-a se ne prima: nju neko na putu moze
+  // zamijeniti, a ona odlucuje i sta se NE blokira.
+  const insecure = await page.request.put(`/api/v1/app/fleet/${hub.id}/lists`, {
+    headers,
+    data: { urls: ['http://lists.example.com/ads.txt'], label: 'Nesigurna' },
+  });
+
+  expect(insecure.status()).toBe(400);
+
+  await page.request.put(`/api/v1/app/fleet/${hub.id}/lists`, {
+    headers,
+    data: { urls: ['https://lists.example.com/dobra.txt'], label: 'Dobra lista' },
+  });
+
+  await page.request.put(`/api/v1/app/fleet/${hub.id}/lists`, {
+    headers,
+    data: { urls: ['https://lists.example.com/losa.txt'], label: 'Losa lista' },
+  });
+
+  await page.goto('/fleet');
+
+  await expect(page.getByText('Losa lista')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Restore previous set' }).click();
+
+  await expect(page.getByText('Dobra lista')).toBeVisible();
+  await expect(page.getByText('This is a restored earlier set.')).toBeVisible();
+
+  // Uredjaj dobija vracen set.
+  const config = await (
+    await page.request.get(`/api/v1/devices/${hub.id}/config`, { headers: hubHeaders })
+  ).json();
+
+  expect(config.config_json.filter_lists.urls).toEqual([
+    'https://lists.example.com/dobra.txt',
+  ]);
+
+  // Historija pamti SVA tri koraka. Rollback koji obrise trag rollbacka
+  // ne moze odgovoriti na pitanje "sta je bilo aktivno i od kada".
+  const history = await (
+    await page.request.get(`/api/v1/app/fleet/${hub.id}/lists`, { headers })
+  ).json();
+
+  expect(history).toHaveLength(3);
+  expect(history[0].source).toBe('rollback');
+  expect(history[0].restored_from).toBe(history[2].id);
+});
+
+test('32 - the fleet screen says what the device does not report', async ({ page }) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const { hub, hubHeaders } = await seedHub(page, seeded.email, token);
+
+  await page.goto('/fleet');
+
+  // Uredjaj jos nije poslao verzije. Prazna tabela bi izgledala kao da
+  // je sve u redu, pa ekran mora reci da podatka nema.
+  await expect(page.locator('#versions-pending')).toContainText(
+    'does not report versions yet',
+  );
+
+  // Zdravstveni pregled se ne crta iz niceg, i ekran to kaze naglas.
+  await expect(page.getByText('What is deliberately not here')).toBeVisible();
+
+  // Kad uredjaj posalje verzije, prikazuju se tacno one koje je poslao.
+  await page.request.post(`/api/v1/devices/${hub.id}/heartbeat`, {
+    headers: hubHeaders,
+    data: { stats: {}, versions: { fornectd: '0.4.1', pihole: '6.0.2' } },
+  });
+
+  await page.reload();
+
+  await expect(page.locator('#versions-pending')).toHaveCount(0);
+  await expect(page.getByText('0.4.1')).toBeVisible();
+  await expect(page.getByText('6.0.2')).toBeVisible();
+
+  // Heartbeat bez verzija ih NE brise: uredjaj na starijem agentu ne
+  // smije ostaviti panel da misli da nista nije poznato.
+  await page.request.post(`/api/v1/devices/${hub.id}/heartbeat`, {
+    headers: hubHeaders,
+    data: { stats: {} },
+  });
+
+  await page.reload();
+
+  await expect(page.getByText('0.4.1')).toBeVisible();
+});
+
+test('33 - the owner is told about a new device and a failed consent', async ({ page }) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const { hub, headers, hubHeaders } = await seedHub(page, seeded.email, token);
+
+  const mac = '02:00:00:00:33:01';
+
+  await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: {
+      events: [
+        {
+          event_id: 'ev-33-new',
+          type: 'device.new',
+          mac,
+          name: 'Nepoznat tablet',
+          device_type: 'unknown',
+          at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  await page.goto('/notifications');
+
+  // Do sada je hub ovo uredno upisivao u red "Novi uredjaji", ali je
+  // vlasnik za to saznavao samo ako bi sam otvorio taj ekran.
+  await expect(page.getByText('New device on the network')).toBeVisible();
+  await expect(page.getByText(/Nepoznat tablet/)).toBeVisible();
+
+  // Ponovljen event ne pravi drugo obavjestenje o istom uredjaju: hub
+  // koji ponovo digne mrezu javi sve sto vidi, i to nije greska.
+  await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: {
+      events: [
+        {
+          event_id: 'ev-33-new-again',
+          type: 'device.new',
+          mac,
+          name: 'Nepoznat tablet',
+          at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  await page.reload();
+
+  await expect(page.getByText('New device on the network')).toHaveCount(1);
+
+  // Kad odluka padne, pitanje nestaje. Lista koja nudi odluku o
+  // uredjaju o kojem je odluka vec pala tjera covjeka da otvori ekran
+  // i vidi da nema sta da radi.
+  await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: {
+      events: [
+        {
+          event_id: 'ev-33-guest',
+          type: 'device.classified',
+          mac,
+          state: 'guest',
+          method: 'auto',
+          at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  await page.reload();
+
+  await expect(page.getByText('New device on the network')).toHaveCount(0);
+
+  // Drugi dio: pristanak dat, instalacija pala.
+  //
+  // Hub salje malim slovima, a seedHub je uredjaj zaveo VELIKIM — tacno
+  // ono sto je ovaj test prvi put otkrio: bez normalizacije MAC adrese
+  // hub taj uredjaj nije mogao naci.
+  const consentMac = 'aa:bb:cc:00:11:22';
+
+  const consentBatch = await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: {
+      events: [
+        {
+          event_id: 'ev-33-consent',
+          type: 'device.classified',
+          mac: consentMac,
+          state: 'consented',
+          method: 'portal',
+          consent: { guardian_name: 'Amra H.', guardian_relation: 'Majka' },
+          at: new Date().toISOString(),
+        },
+        {
+          event_id: 'ev-33-failed',
+          type: 'consent.verify_failed',
+          mac: consentMac,
+          error: 'Certifikat nije prepoznat.',
+          at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  // Ishod SVAKOG eventa se provjerava. Bez ovoga odbijen event izgleda
+  // kao obavjestenje koje nije stiglo — i trazi se na pogresnom mjestu.
+  const outcomes = (await consentBatch.json()).results;
+
+  expect(outcomes.map((r: { status: string; reason?: string }) => [r.status, r.reason])).toEqual([
+    ['applied', undefined],
+    ['applied', undefined],
+  ]);
+
+  await page.reload();
+
+  // Ovo je rupa koja se zatvara: bez javljanja covjek ostaje u
+  // uvjerenju da je puna zastita ukljucena, a nije.
+  await expect(page.getByText('Full protection is not on')).toBeVisible();
+
+  // Kad instalacija na kraju prodje, poruka nestaje — ne stoji kao
+  // trajna optuzba.
+  const devices = await (
+    await page.request.get('/api/v1/app/network-devices', { headers })
+  ).json();
+
+  const consented = devices.find(
+    (device: { mac_address: string }) => device.mac_address === consentMac,
+  );
+
+  await page.request.post(
+    `/api/v1/app/network-devices/${consented.id}/consent/verify`,
+    { headers, data: { success: true, manual: true } },
+  );
+
+  await page.reload();
+
+  await expect(page.getByText('Full protection is not on')).toHaveCount(0);
+});
+
+test('34 - one device is one device, however its MAC address is typed', async ({ page }) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const { hub, headers, hubHeaders } = await seedHub(page, seeded.email, token);
+
+  // Vlasnik kopira MAC iz Windowsa: velika slova, crtice.
+  const created = await page.request.post('/api/v1/app/network-devices', {
+    headers,
+    data: { mac_address: 'AA-BB-CC-00-44-01', name: 'Laptop', type: 'unknown' },
+  });
+
+  expect(created.status()).toBe(201);
+
+  // Cuva se u jednom obliku.
+  expect((await created.json()).mac_address).toBe('aa:bb:cc:00:44:01');
+
+  // Hub javi isti uredjaj kao nov, svojim oblikom.
+  const reported = await page.request.post(`/api/v1/devices/${hub.id}/events`, {
+    headers: hubHeaders,
+    data: {
+      events: [
+        {
+          event_id: 'ev-34-new',
+          type: 'device.new',
+          mac: 'aa:bb:cc:00:44:01',
+          name: 'Laptop',
+          at: new Date().toISOString(),
+        },
+        {
+          event_id: 'ev-34-guest',
+          type: 'device.classified',
+          mac: 'aa:bb:cc:00:44:01',
+          state: 'guest',
+          method: 'auto',
+          at: new Date().toISOString(),
+        },
+      ],
+    },
+  });
+
+  // Hub ga NALAZI. Prije ove izmjene drugi event bi bio odbijen kao
+  // "nije zaveden na nalogu".
+  const outcomes = (await reported.json()).results;
+
+  expect(outcomes.map((r: { status: string }) => r.status)).toEqual(['applied', 'applied']);
+
+  // I sto je vaznije: to je i dalje JEDAN uredjaj. Ranije bi ovdje
+  // nastao drugi red — isti laptop dva puta u listi, i dva mjesta u
+  // licenci.
+  const devices = await (
+    await page.request.get('/api/v1/app/network-devices', { headers })
+  ).json();
+
+  const laptops = devices.filter(
+    (device: { mac_address: string }) => device.mac_address === 'aa:bb:cc:00:44:01',
+  );
+
+  expect(laptops).toHaveLength(1);
+  expect(laptops[0].pairing_state).toBe('guest');
+
+  // Nesto sto nije MAC adresa se ne prima ni sa jedne strane.
+  const garbage = await page.request.post('/api/v1/app/network-devices', {
+    headers,
+    data: { mac_address: 'nije-mac', name: 'Pokvaren unos' },
+  });
+
+  expect(garbage.status()).toBe(400);
+});
+
+// Direktan pristup bazi, SAMO iz testova i samo za ono sto nijedna ruta
+// ne smije uraditi.
+//
+// Pristanak na stariju verziju politike je upravo takav slucaj: verzija
+// je konstanta u kodu (services/consent-policy.ts) i mijenja se novim
+// releaseom, a ne pozivom. Ruta koja bi to dozvolila bila bi ruta za
+// falsifikovanje traga pristanka. Isto nacelo kao kod koda za
+// verifikaciju, koji testovi citaju iz server/.mail-outbox jer ga
+// nijedna ruta ne smije vratiti.
+//
+// `pg` se uzima iz server/node_modules, a DATABASE_URL iz server/.env —
+// iste koje koristi backend, pa test ne moze gledati u drugu bazu.
+async function withDatabase<T>(
+  work: (query: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }>) => Promise<T>,
+): Promise<T> {
+  const serverDir = path.resolve(process.cwd(), 'server');
+
+  let connectionString = process.env['DATABASE_URL'];
+
+  if (!connectionString) {
+    const line = fs
+      .readFileSync(path.join(serverDir, '.env'), 'utf8')
+      .split(/\r?\n/)
+      .find((entry) => entry.startsWith('DATABASE_URL='));
+
+    if (!line) {
+      throw new Error('DATABASE_URL nije pronadjen u server/.env.');
+    }
+
+    connectionString = line.slice('DATABASE_URL='.length).trim().replace(/^["']|["']$/g, '');
+  }
+
+  const { Client } = createRequire(path.join(serverDir, 'package.json'))('pg');
+  const client = new Client({ connectionString });
+
+  await client.connect();
+
+  try {
+    return await work((sql, params) => client.query(sql, params));
+  } finally {
+    await client.end();
+  }
+}
+
+test('35 - devices whose consent predates the current policy are listed together', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // Bez huba: pristanak ne trazi hub, a svaka registracija trosi jedno
+  // od malo dozvoljenih mjesta po satu (vidi registerHub).
+  const ids: string[] = [];
+
+  for (const [mac, name] of [
+    ['02:00:00:00:35:01', 'Tablet Lejla'],
+    ['02:00:00:00:35:02', 'Telefon Adi'],
+  ]) {
+    const created = await page.request.post('/api/v1/app/network-devices', {
+      headers,
+      data: { mac_address: mac, name, type: 'phone' },
+    });
+
+    expect(created.status()).toBe(201);
+
+    const device = await created.json();
+
+    const granted = await page.request.post(
+      `/api/v1/app/network-devices/${device.id}/consent`,
+      { headers, data: { guardian_name: 'Amra H.', guardian_relation: 'Majka' } },
+    );
+
+    expect(granted.status()).toBe(201);
+
+    ids.push(device.id);
+  }
+
+  await page.goto('/notifications');
+
+  // Oba pristanka su na vazecoj verziji — nema sta javiti.
+  await expect(page.getByText('Consent needs renewing')).toHaveCount(0);
+
+  // Politika dobija novu verziju. U stvarnosti je to novi release; ovdje
+  // oba zapisa "ostare" direktno u bazi, jer to nijedna ruta ne smije.
+  await withDatabase((query) =>
+    query(
+      `UPDATE consent_records SET policy_version = '0.9'
+       WHERE network_device_id = ANY($1::uuid[]) AND revoked_at IS NULL`,
+      [ids],
+    ),
+  );
+
+  await page.reload();
+
+  // Jedno obavjestenje, oba uredjaja po imenu — vlasnik ne mora otvarati
+  // svaki uredjaj da sazna koji trazi ponovno prihvatanje.
+  await expect(page.getByText('Consent needs renewing')).toHaveCount(1);
+  await expect(page.getByText(/earlier terms \(2\)/)).toBeVisible();
+  await expect(page.getByText(/Tablet Lejla, Telefon Adi/)).toBeVisible();
+
+  // Jedan obnovi pristanak. Broj se MORA promijeniti — obavjestenje koje
+  // i dalje kaze "2" kad je ostao jedan je upravo greska na koju je
+  // servis pazio (createNotification preskace upis kad isto vec stoji).
+  await page.request.post(`/api/v1/app/network-devices/${ids[0]}/consent`, {
+    headers,
+    data: { guardian_name: 'Amra H.', guardian_relation: 'Majka' },
+  });
+
+  await page.reload();
+
+  await expect(page.getByText('Consent needs renewing')).toHaveCount(1);
+  await expect(page.getByText(/earlier terms \(1\)/)).toBeVisible();
+  await expect(page.getByText(/Tablet Lejla/)).toHaveCount(0);
+
+  // I kad obnovi i drugi, obavjestenja vise nema.
+  await page.request.post(`/api/v1/app/network-devices/${ids[1]}/consent`, {
+    headers,
+    data: { guardian_name: 'Amra H.', guardian_relation: 'Majka' },
+  });
+
+  await page.reload();
+
+  await expect(page.getByText('Consent needs renewing')).toHaveCount(0);
+
+  // Stari pristanci nisu obrisani nego zatvoreni, sa razlogom — trag
+  // revizije mora pokazati i sta je bilo prije.
+  const history = await withDatabase((query) =>
+    query(
+      `SELECT policy_version, revoked_reason FROM consent_records
+       WHERE network_device_id = ANY($1::uuid[])
+       ORDER BY granted_at`,
+      [ids],
+    ),
+  );
+
+  expect(history.rows.filter((row) => row.policy_version === '0.9')).toHaveLength(2);
+  expect(history.rows.every((row) => row.policy_version !== '0.9' || row.revoked_reason)).toBe(
+    true,
+  );
 });

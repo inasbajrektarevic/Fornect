@@ -52,6 +52,21 @@ export const routes: Routes = [
       import('./features/new-devices/new-devices').then((m) => m.NewDevices),
   },
   {
+    // Portal dobija svaki nalog, ne samo hotel — zato bez proModeGuard-a.
+    path: 'portal-branding',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/portal-branding/portal-branding').then((m) => m.PortalBranding),
+  },
+  {
+    // Ažuriranje uređaja (Zadatak 1, Tačka 6). Bez proModeGuard-a:
+    // Home uređaj se ažurira isto kao Pro, i vlasnik ima isto pravo da
+    // zna kad će se to desiti.
+    path: 'fleet',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/fleet/fleet').then((m) => m.Fleet),
+  },
+  {
     // Bez homeModeGuard-a: kapacitet je pitanje licence, a ono
     // pogađa i Pro naloge — tamo i više.
     path: 'capacity',

@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="bs">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Fornect</title>
+
+    <!--
+      Bez ijednog vanjskog resursa: ni CDN, ni web font, ni analitika.
+
+      Klijent koji gleda ovu stranicu JE iza captive portala i nema
+      internet — svaki vanjski zahtjev bi visio dok ne istekne, a
+      stranica bi se prikazala napola ili nikako. Isti razlog je i za
+      sistemski font umjesto preuzetog.
+
+      Bez framework-a: na iPhone-u ovo otvara Captive Network Assistant,
+      mali WebView sa svojim ograničenjima, a na Androidu ugrađeni
+      preglednik. Što manje pokretnih dijelova, to manje načina da ne
+      proradi baš na uređaju koji treba zaštititi.
+    -->
+    <link rel="stylesheet" href="portal.css" />
+  </head>
+
+  <body>
+    <div class="portal" id="portal" hidden>
+      <header class="head">
+        <span class="brand" id="brand">Fornect</span>
+
+        <button type="button" class="lang" id="lang-toggle" aria-live="polite">EN</button>
+      </header>
+
+      <main id="main">
+        <!-- Učitavanje -->
+        <section class="view" id="view-loading">
+          <p class="muted" data-t="loading"></p>
+        </section>
+
+        <!-- Kapacitet licence je popunjen (Zadatak 1, Tačka 4, sloj L1) -->
+        <section class="view" id="view-capacity" hidden>
+          <h1 data-t="capacityTitle"></h1>
+          <p data-t="capacityBody"></p>
+          <p class="note" data-t="capacityNote"></p>
+          <p class="muted mac" id="capacity-mac"></p>
+        </section>
+
+        <!--
+          Uređaj koji se vraća, a već je odlučio.
+
+          Bez ovoga portal svakome pokazuje izbor kao da se prvi put
+          javlja — pa uređaju koji već ima punu zaštitu nudi da
+          „izabere" ono što ima, dok mu pristanak stoji zapisan.
+        -->
+        <section class="view" id="view-known" hidden>
+          <h1 id="known-title"></h1>
+          <p id="known-body"></p>
+
+          <div class="actions">
+            <button
+              type="button"
+              class="primary"
+              id="known-upgrade"
+              data-t="knownGuestAction"
+              hidden></button>
+
+            <!-- Tacka 5: "prebaci na osnovnu" stoji i u portalu, ne
+                 samo u panelu. Opoziv je pravo davaoca pristanka i ne
+                 smije traziti da se negdje prijavi. -->
+            <button
+              type="button"
+              class="secondary"
+              id="known-downgrade"
+              data-t="knownDowngradeAction"
+              hidden></button>
+          </div>
+        </section>
+
+        <!-- Izbor zaštite -->
+        <section class="view" id="view-choice" hidden>
+          <h1 id="welcome-title"></h1>
+          <p id="welcome-message"></p>
+
+          <div class="choices">
+            <button type="button" class="choice choice--primary" id="choose-full">
+              <strong data-t="chooseFullTitle"></strong>
+              <span data-t="protection.fullDescription"></span>
+            </button>
+
+            <button type="button" class="choice" id="choose-guest">
+              <strong data-t="chooseGuestTitle"></strong>
+              <span data-t="protection.standardDescription"></span>
+            </button>
+          </div>
+
+          <p class="note" data-t="protection.coverageNote"></p>
+
+          <button type="button" class="link" id="show-difference" data-t="differenceLink"></button>
+
+          <p class="muted mac" id="choice-mac"></p>
+        </section>
+
+        <!-- "Koja je razlika?" -->
+        <section class="view" id="view-difference" hidden>
+          <h1 data-t="differenceTitle"></h1>
+
+          <h2 data-t="chooseGuestTitle"></h2>
+          <p data-t="protection.standardDescription"></p>
+
+          <h2 data-t="chooseFullTitle"></h2>
+          <p data-t="protection.fullDescription"></p>
+
+          <p class="note" data-t="protection.coverageNote"></p>
+          <p class="note" data-t="protection.pinningNote"></p>
+
+          <button type="button" class="secondary" id="difference-back" data-t="back"></button>
+        </section>
+
+        <!-- Forma pristanka -->
+        <section class="view" id="view-consent" hidden>
+          <h1 data-t="consentTitle"></h1>
+
+          <!-- Nova verzija politike: uredjaj koji je prihvatio stariju
+               mora ponovo odluciti. Pristanak vrijedi za tekst na koji
+               je dat, ne zauvijek. -->
+          <p class="banner" id="reconsent-banner" hidden></p>
+
+          <p data-t="consentIntro"></p>
+
+          <form id="consent-form" novalidate>
+            <label>
+              <span data-t="guardianName"></span>
+              <input type="text" id="guardian-name" autocomplete="name" required />
+            </label>
+
+            <label>
+              <span data-t="guardianRelation"></span>
+              <input type="text" id="guardian-relation" required />
+            </label>
+
+            <label class="check">
+              <input type="checkbox" id="subject-minor" />
+              <span data-t="subjectIsMinor"></span>
+            </label>
+
+            <label class="check">
+              <input type="checkbox" id="accept-policy" required />
+              <span>
+                <span data-t="acceptPolicy"></span>
+                <strong id="policy-version"></strong>
+              </span>
+            </label>
+
+            <!-- Politika privatnosti mora biti dostupna U TRENUTKU kad
+                 se pristanak daje. Pristanak dat bez uvida u to sta se
+                 sa podacima radi nije informisan pristanak. -->
+            <p class="privacy" id="privacy-link-row" hidden>
+              <a id="privacy-link" target="_blank" rel="noopener noreferrer"></a>
+            </p>
+
+            <p class="error" id="consent-error" hidden></p>
+
+            <div class="actions">
+              <button type="button" class="secondary" id="consent-back" data-t="back"></button>
+              <button type="submit" class="primary" data-t="consentSubmit"></button>
+            </div>
+          </form>
+        </section>
+
+        <!-- Uputstvo za instalaciju certifikata -->
+        <section class="view" id="view-install" hidden>
+          <h1 data-t="installTitle"></h1>
+
+          <div class="tabs" id="platform-tabs">
+            <button type="button" data-os="ios" data-t="protection.platformIos"></button>
+            <button type="button" data-os="android" data-t="protection.platformAndroid"></button>
+            <button type="button" data-os="windows" data-t="protection.platformWindows"></button>
+            <button type="button" data-os="mac" data-t="protection.platformMac"></button>
+          </div>
+
+          <a class="primary download" id="ca-download" download="fornect-ca.crt" data-t="downloadCa"></a>
+
+          <ol id="install-steps"></ol>
+
+          <p class="note" id="install-note"></p>
+          <p class="note" id="install-extra" hidden></p>
+
+          <div class="fingerprint">
+            <span data-t="fingerprintLabel"></span>
+            <code id="ca-fingerprint"></code>
+            <p class="muted" data-t="fingerprintHint"></p>
+          </div>
+
+          <!--
+            Provjera stoji OVDJE, a ne na svom ekranu. Korisnik u ovom
+            trenutku drži telefon u postavkama i čita korake; da mu se
+            stranica prebaci na "provjeravam", izgubio bi uputstvo usred
+            posla. Ekran se mijenja tek kad provjera prođe.
+          -->
+          <div class="checking">
+            <p id="check-status" data-t="checkingBody"></p>
+            <p class="error" id="checking-error" hidden></p>
+            <p class="note" data-t="checkingNote"></p>
+
+            <!-- Rucna potvrda je FALLBACK, ne precica: pojavi se tek kad
+                 automatska provjera ne prodje, i zapis nosi oznaku da je
+                 pristanak izjavljen a ne dokazan. -->
+            <button
+              type="button"
+              class="secondary"
+              id="manual-confirm"
+              data-t="manualConfirm"
+              hidden></button>
+
+            <p class="note" id="manual-note" data-t="manualNote" hidden></p>
+          </div>
+        </section>
+
+        <!-- Gotovo -->
+        <section class="view" id="view-done" hidden>
+          <h1 id="done-title"></h1>
+          <p id="done-body"></p>
+          <p class="note" id="done-note"></p>
+        </section>
+
+        <!-- Nešto nije proradilo -->
+        <section class="view" id="view-error" hidden>
+          <h1 data-t="errorTitle"></h1>
+          <p id="error-body"></p>
+          <button type="button" class="secondary" id="error-retry" data-t="retry"></button>
+        </section>
+      </main>
+
+      <footer class="foot">
+        <p class="muted" id="support"></p>
+      </footer>
+    </div>
+
+    <script src="portal.js"></script>
+  </body>
+</html>

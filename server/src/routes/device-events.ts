@@ -34,7 +34,8 @@ import {
   type ConsentDeviceRow,
 } from '../services/consent-actions';
 
-import { syncCapacityNotice } from '../services/notifications';
+import { normaliseMac } from '../services/mac';
+import { recordNewDeviceNotice, syncCapacityNotice } from '../services/notifications';
 
 type EventType =
   | 'device.new'
@@ -136,7 +137,7 @@ async function applyEvent(
 ): Promise<EventOutcome> {
   const eventId = event.event_id?.trim();
   const type = event.type?.trim() as EventType | undefined;
-  const mac = event.mac?.trim().toLowerCase();
+  const mac = normaliseMac(event.mac);
 
   if (!eventId) {
     return { event_id: '', status: 'rejected', reason: 'event_id je obavezan.' };
@@ -147,7 +148,11 @@ async function applyEvent(
   }
 
   if (!mac) {
-    return { event_id: eventId, status: 'rejected', reason: 'mac je obavezan.' };
+    return {
+      event_id: eventId,
+      status: 'rejected',
+      reason: 'mac je obavezan i mora biti MAC adresa (aa:bb:cc:dd:ee:ff).',
+    };
   }
 
   const client = await pool.connect();
@@ -284,6 +289,22 @@ async function handleNewDevice(
 
   // Nov uređaj može biti onaj koji prelazi kapacitet licence.
   await syncCapacityNotice(client, accountId);
+
+  // I vlasnik o njemu mora saznati bez otvaranja reda „Novi uređaji".
+  const { rows: created } = await client.query<{ id: string }>(
+    'SELECT id FROM network_devices WHERE account_id = $1 AND mac_address = $2',
+    [accountId, mac],
+  );
+
+  if (created[0]) {
+    await recordNewDeviceNotice(
+      client,
+      accountId,
+      created[0].id,
+      mac,
+      event.name?.trim() || mac,
+    );
+  }
 
   return null;
 }

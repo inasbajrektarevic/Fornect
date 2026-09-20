@@ -1,0 +1,282 @@
+<div class="fleet-page">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">{{ 'fleet.eyebrow' | translate }}</p>
+      <h1>{{ 'fleet.title' | translate }}</h1>
+      <p class="subtitle">{{ 'fleet.subtitle' | translate }}</p>
+    </div>
+
+    <button type="button" class="back-button" routerLink="/settings">
+      {{ 'fleet.backToSettings' | translate }}
+    </button>
+  </header>
+
+  <main class="content">
+    @if (errorKey()) {
+      <p class="error">{{ errorKey() | translate }}</p>
+    }
+
+    @if (errorText()) {
+      <p class="error">{{ errorText() }}</p>
+    }
+
+    @if (saved()) {
+      <p class="ok">{{ 'fleet.saved' | translate }}</p>
+    }
+
+    @if (devices(); as hubs) {
+      @if (hubs.length === 0) {
+        <section class="card">
+          <h2>{{ 'fleet.noHubTitle' | translate }}</h2>
+          <p>{{ 'fleet.noHubBody' | translate }}</p>
+        </section>
+      }
+
+      @for (device of hubs; track device.id) {
+        <section class="card hub">
+          <div class="hub-head">
+            <div>
+              <h2>{{ device.name }}</h2>
+
+              <p class="muted">
+                {{
+                  (device.online ? 'fleet.online' : 'fleet.offline') | translate
+                }}
+              </p>
+            </div>
+
+            @if (device.otaPaused) {
+              <span class="badge badge--paused">
+                {{ 'fleet.pausedBadge' | translate }}
+              </span>
+            }
+          </div>
+
+          <!-- INVENTAR VERZIJA -->
+          <div class="block">
+            <h3>{{ 'fleet.versionsTitle' | translate }}</h3>
+
+            @if (versionEntries(device).length > 0) {
+              <dl class="versions">
+                @for (entry of versionEntries(device); track entry.name) {
+                  <div>
+                    <dt>{{ entry.name }}</dt>
+                    <dd>{{ entry.version }}</dd>
+                  </div>
+                }
+              </dl>
+            } @else {
+              <!-- Prazna tabela bi izgledala kao da je sve u redu. -->
+              <p class="pending" id="versions-pending">
+                {{ 'fleet.versionsPending' | translate }}
+              </p>
+            }
+          </div>
+
+          <!-- PRSTEN ROLLOUTU -->
+          <div class="block">
+            <h3>{{ 'fleet.ringTitle' | translate }}</h3>
+            <p class="hint">{{ 'fleet.ringHint' | translate }}</p>
+
+            <div class="rings">
+              @for (ring of rings; track ring) {
+                <button
+                  type="button"
+                  class="ring"
+                  [class.ring--active]="device.otaRing === ring"
+                  [disabled]="busy()"
+                  (click)="setRing(device, ring)">
+                  {{ 'fleet.ring.' + ring | translate }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- PROZOR ODRŽAVANJA -->
+          <div class="block">
+            <h3>{{ 'fleet.windowTitle' | translate }}</h3>
+            <p class="hint">{{ 'fleet.windowHint' | translate }}</p>
+
+            <div class="window">
+              <label>
+                <span>{{ 'fleet.windowStart' | translate }}</span>
+
+                <input
+                  type="time"
+                  #start
+                  [value]="device.maintenanceStart"
+                  name="start-{{ device.id }}" />
+              </label>
+
+              <label>
+                <span>{{ 'fleet.windowEnd' | translate }}</span>
+
+                <input
+                  type="time"
+                  #end
+                  [value]="device.maintenanceEnd"
+                  name="end-{{ device.id }}" />
+              </label>
+
+              <button
+                type="button"
+                class="primary-button"
+                [disabled]="busy()"
+                (click)="saveWindow(device, start.value, end.value)">
+                {{ 'common.save' | translate }}
+              </button>
+            </div>
+          </div>
+
+          <!-- KILL-SWITCH -->
+          <div class="block">
+            <h3>{{ 'fleet.killTitle' | translate }}</h3>
+
+            <p class="hint">
+              {{
+                (device.otaPaused ? 'fleet.killHintPaused' : 'fleet.killHintRunning')
+                  | translate
+              }}
+            </p>
+
+            <button
+              type="button"
+              class="danger-button"
+              [disabled]="busy()"
+              (click)="togglePause(device)">
+              {{
+                (device.otaPaused ? 'fleet.resume' : 'fleet.pause') | translate
+              }}
+            </button>
+          </div>
+
+          <!-- FILTER LISTE -->
+          <div class="block">
+            <h3>{{ 'fleet.listsTitle' | translate }}</h3>
+
+            @if (device.activeList) {
+              <p class="list-label">
+                {{ device.activeList.label || ('fleet.listUnnamed' | translate) }}
+
+                <span class="muted">
+                  ({{
+                    'fleet.listCount'
+                      | translate: { count: device.activeList.urls.length }
+                  }})
+                </span>
+              </p>
+
+              @if (device.activeList.source === 'rollback') {
+                <p class="pending">{{ 'fleet.listFromRollback' | translate }}</p>
+              }
+            } @else {
+              <p class="pending">{{ 'fleet.listNone' | translate }}</p>
+            }
+
+            @if (warnings().length > 0) {
+              <div class="warning">
+                <p>{{ 'fleet.directSourceWarning' | translate }}</p>
+
+                <ul>
+                  @for (url of warnings(); track url) {
+                    <li>{{ url }}</li>
+                  }
+                </ul>
+              </div>
+            }
+
+            @if (editing() === device.id) {
+              <label class="field">
+                <span>{{ 'fleet.listLabel' | translate }}</span>
+
+                <input
+                  type="text"
+                  [ngModel]="draftLabel()"
+                  (ngModelChange)="draftLabel.set($event)"
+                  name="label-{{ device.id }}"
+                  maxlength="80" />
+              </label>
+
+              <label class="field">
+                <span>{{ 'fleet.listUrls' | translate }}</span>
+
+                <textarea
+                  rows="6"
+                  [ngModel]="draftUrls()"
+                  (ngModelChange)="draftUrls.set($event)"
+                  name="urls-{{ device.id }}"
+                  spellcheck="false"></textarea>
+
+                <small>{{ 'fleet.listUrlsHint' | translate }}</small>
+              </label>
+
+              <div class="actions">
+                <button type="button" class="back-button" (click)="cancelLists()">
+                  {{ 'common.cancel' | translate }}
+                </button>
+
+                <button
+                  type="button"
+                  class="primary-button"
+                  [disabled]="busy()"
+                  (click)="saveLists(device)">
+                  {{ 'common.save' | translate }}
+                </button>
+              </div>
+            } @else {
+              <div class="actions">
+                <button type="button" class="back-button" (click)="openLists(device)">
+                  {{ 'fleet.editLists' | translate }}
+                </button>
+
+                <!-- Dugme koje ne može ništa vratiti ne smije biti aktivno. -->
+                <button
+                  type="button"
+                  class="danger-button"
+                  [disabled]="busy() || !device.canRollback"
+                  (click)="rollback(device)">
+                  {{ 'fleet.rollback' | translate }}
+                </button>
+              </div>
+
+              @if (!device.canRollback) {
+                <p class="pending">{{ 'fleet.rollbackUnavailable' | translate }}</p>
+              }
+            }
+          </div>
+
+          <!-- JE LI STIGLO DO UREĐAJA -->
+          <div class="block block--delivery">
+            @if (!hasConfig(device)) {
+              <p class="pending">{{ 'fleet.configNone' | translate }}</p>
+            } @else if (configDelivered(device)) {
+              <p class="ok-inline">
+                {{
+                  'fleet.configDelivered'
+                    | translate: { version: configVersionLabel(device) }
+                }}
+              </p>
+            } @else {
+              <p class="pending">
+                {{
+                  'fleet.configPending'
+                    | translate: { version: configVersionLabel(device) }
+                }}
+              </p>
+            }
+          </div>
+        </section>
+      }
+
+      <!-- ŠTA NAMJERNO NIJE OVDJE -->
+      <section class="card card--locked">
+        <h2>{{ 'fleet.missingTitle' | translate }}</h2>
+        <p>{{ 'fleet.missingBody' | translate }}</p>
+      </section>
+    } @else {
+      <div class="card">
+        <p>{{ 'fleet.loading' | translate }}</p>
+      </div>
+    }
+  </main>
+</div>

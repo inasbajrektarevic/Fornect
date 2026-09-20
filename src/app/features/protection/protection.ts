@@ -21,7 +21,8 @@ import { serverErrorMessage } from '../../core/services/api-error';
 export type CertificatePlatform =
   | 'android'
   | 'ios'
-  | 'desktop';
+  | 'windows'
+  | 'mac';
 
 /**
  * Jedna kontrola sa tri jacine umjesto prekidaca i odvojenog
@@ -454,10 +455,15 @@ export class Protection {
   // Instalacija certifikata
   // ---------------------------------------------------------------
 
+  // Windows i macOS su odvojeni, jer im se koraci stvarno razlikuju:
+  // na Windowsu ide čarobnjak i "Trusted Root Certification
+  // Authorities", na Mac-u Keychain Access i "Always Trust". Zajedničko
+  // uputstvo za "računar" nije vodilo ni kroz jedno.
   readonly certPlatforms: CertificatePlatform[] = [
     'android',
     'ios',
-    'desktop'
+    'windows',
+    'mac'
   ];
 
   certPlatform: CertificatePlatform = 'android';

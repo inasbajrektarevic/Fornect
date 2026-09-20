@@ -6,9 +6,11 @@
 import type { FastifyInstance } from 'fastify';
 
 import { pool } from '../db';
+import { env } from '../env';
 import { authenticateDevice } from '../plugins/authenticate-device';
 import { generateDeviceToken, hashDeviceToken } from '../services/device-tokens';
 import { generatePairingCode, PAIRING_CODE_TTL_MINUTES } from '../services/hub-pairing';
+import { normaliseMac } from '../services/mac';
 
 import {
   getAccountTimeZone,
@@ -28,6 +30,14 @@ interface RegisterBody {
 
 interface HeartbeatBody {
   stats?: Record<string, unknown>;
+
+  // Verzije softvera na uređaju (Zadatak 1, Tačka 6: inventar verzija).
+  // Slobodan oblik ključ→verzija, npr. { fornectd: '0.4.1',
+  // pihole: '6.0.2', squid: '6.10', portal_bundle: '12' }, jer se skup
+  // komponenti mijenja, a panel ih ionako prikazuje kao listu.
+  //
+  // Dok uređaj ovo ne šalje, ostaje NULL i panel to jasno kaže.
+  versions?: Record<string, unknown>;
 }
 
 interface ConfigAckBody {
@@ -56,7 +66,7 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
       // (VPN/allowlist) ne postavi odvojeno na VPS-u.
       config: {
         rateLimit: {
-          max: 10,
+          max: env.deviceRegisterMaxPerHour,
           timeWindow: '1 hour',
         },
       },
@@ -138,12 +148,27 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
     { preHandler: authenticateDevice },
     async (request, reply) => {
       const device = request.device!;
-      const { stats } = request.body ?? {};
+      const { stats, versions } = request.body ?? {};
+
+      // Verzije se denormalizuju na devices samo kad stvarno stignu.
+      // Heartbeat bez njih NE briše ranije prijavljene: uređaj koji je
+      // privremeno na starijem agentu ne smije obrisati podatak i
+      // ostaviti panel da misli da ništa nije poznato.
+      const reportedVersions =
+        versions && typeof versions === 'object' && !Array.isArray(versions) ? versions : null;
 
       await pool.query(
-        `UPDATE devices SET status = 'online', last_seen_at = now(), updated_at = now()
+        `UPDATE devices
+         SET status = 'online',
+             last_seen_at = now(),
+             updated_at = now(),
+             reported_versions = COALESCE($2::jsonb, reported_versions),
+             reported_versions_at = CASE
+               WHEN $2::jsonb IS NULL THEN reported_versions_at
+               ELSE now()
+             END
          WHERE id = $1`,
-        [device.id],
+        [device.id, reportedVersions ? JSON.stringify(reportedVersions) : null],
       );
 
       await pool.query(
@@ -183,10 +208,11 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
 
       const accountId = hub.claimed_by_account_id;
 
+      // Isto pravilo kao svuda drugo (services/mac.ts). Ranije je ova
+      // ruta jedina ispravno spuštala slova — ali tako što je obje strane
+      // spuštala u JS-u, pa je problem u bazi ostajao sakriven.
       const present = new Set(
-        reported
-          .filter((mac): mac is string => typeof mac === 'string')
-          .map((mac) => mac.trim().toLowerCase()),
+        reported.map(normaliseMac).filter((mac): mac is string => mac !== null),
       );
 
       const client = await pool.connect();
@@ -210,7 +236,7 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
         let changed = 0;
 
         for (const before of devices) {
-          const online = present.has(before.mac_address.trim().toLowerCase());
+          const online = present.has(before.mac_address);
 
           if (online === before.online) {
             continue;

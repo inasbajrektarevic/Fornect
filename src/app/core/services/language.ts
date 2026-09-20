@@ -8,6 +8,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
   bs: {
     'common.backToDashboard': 'Nazad na početnu',
     'common.save': 'Sačuvaj',
+    'common.cancel': 'Odustani',
     'common.saved': 'Sačuvano',
     'common.on': 'Uključeno',
     'common.off': 'Isključeno',
@@ -233,8 +234,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Android telefon',
     'protection.platformIos':
       'iPhone ili iPad',
-    'protection.platformDesktop':
-      'Računar',
+    'protection.platformWindows':
+      'Windows',
+    'protection.platformMac':
+      'Mac',
     'protection.androidStep1':
       'Na uređaju koji štitite otvorite ovu stranicu i preuzmite Fornect certifikat.',
     'protection.androidStep2':
@@ -261,18 +264,30 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Vratite se ovdje i potvrdite da je profil instaliran.',
     'protection.iosNote':
       'Korak sa postavkama pouzdanosti je obavezan. Bez njega iPhone neće koristiti punu zaštitu.',
-    'protection.desktopStep1':
+    'protection.windowsStep1':
       'Preuzmite Fornect certifikat na računar.',
-    'protection.desktopStep2':
-      'Otvorite preuzeti fajl dvoklikom.',
-    'protection.desktopStep3':
-      'Izaberite instalaciju među pouzdane certifikate sistema.',
-    'protection.desktopStep4':
-      'Zatvorite i ponovo otvorite internet preglednik.',
-    'protection.desktopStep5':
+    'protection.windowsStep2':
+      'Dvoklik na preuzeti fajl, pa izaberite „Install Certificate".',
+    'protection.windowsStep3':
+      'Izaberite „Local Machine" i potvrdite upit sistema za dozvolu.',
+    'protection.windowsStep4':
+      'Izaberite „Place all certificates in the following store", odaberite „Trusted Root Certification Authorities" i potvrdite.',
+    'protection.windowsStep5':
       'Vratite se ovdje i potvrdite da je profil instaliran.',
-    'protection.desktopNote':
-      'Neki preglednici drže vlastitu listu certifikata, pa certifikat treba dodati i u sam preglednik.',
+    'protection.windowsNote':
+      'Chrome i Edge koriste sistemsku listu certifikata, pa im je ovo dovoljno. Firefox drži vlastitu listu i treba ga dodati zasebno, u njegovim postavkama.',
+    'protection.macStep1':
+      'Preuzmite Fornect certifikat na Mac.',
+    'protection.macStep2':
+      'Dvoklik na preuzeti fajl — otvara se Keychain Access (Pristup ključevima).',
+    'protection.macStep3':
+      'Izaberite keychain „System" i unesite administratorsku lozinku.',
+    'protection.macStep4':
+      'Nađite Fornect u listi, dvoklik na njega, otvorite odjeljak „Trust" i postavite „When using this certificate" na „Always Trust".',
+    'protection.macStep5':
+      'Vratite se ovdje i potvrdite da je profil instaliran.',
+    'protection.macNote':
+      'Safari i Chrome koriste sistemski keychain. Firefox drži vlastitu listu i treba ga dodati zasebno, u njegovim postavkama.',
     'protection.pinningNote':
       'Pojedine aplikacije, poput bankovnih, namjerno odbijaju ovakvu zaštitu. Za njih ostaje standardna zaštita — to je očekivano i nije greška.',
 
@@ -306,7 +321,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'devices.limitReachedTitle':
       'Kapacitet licence je prekoračen',
     'devices.limitReachedDescription':
-      'Licenca vašeg Fornect uređaja pokriva {limit} uređaja. Preko toga ih je {count} — oni rade na mreži, ali ih Fornect ne štiti.',
+      'Licenca vašeg Fornect uređaja pokriva {limit} uređaja. Preko toga ih je {count} — oni nisu registrovani i ne dobijaju uslugu dok se mjesto ne oslobodi.',
     'devices.limitReachedAction':
       'Pogledaj detalje',
 
@@ -316,9 +331,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Uređaja na mreži: {used}. Licenca pokriva {capacity}.',
     'capacity.whatItMeans': 'Šta ovo znači',
     'capacity.explanation':
-      'Licenca vašeg Fornect uređaja pokriva određen broj uređaja. Oni koji su se pojavili poslije tog broja ostaju na mreži, ali ih Fornect ne štiti — ne filtrira im saobraćaj i ne primjenjuje profil ni raspored.',
+      'Licenca vašeg Fornect uređaja pokriva određen broj uređaja. Oni koji su se pojavili poslije tog broja nisu registrovani, pa im Fornect ne pruža uslugu — ni razrješavanje imena ni filtriranje. Bez toga preko ove mreže nemaju pristup internetu.',
     'capacity.notBlockedNote':
-      'Panel ne isključuje uređaj sa mreže. Blokada na nivou mreže je posao samog Fornect uređaja; ovdje samo vidite ko je ostao izvan zaštite.',
+      'Ograničenje se primjenjuje pri registraciji uređaja — ovdje, a ne u DNS-u ni u proxyju. Sam Fornect uređaj dodatno pazi da broj aktivnih uređaja ne prekorači licencu.',
     'capacity.overflowTitle': 'Izvan licence: {count}',
     'capacity.slot': 'Mjesto',
     'capacity.openDevice': 'Otvori uređaj',
@@ -538,7 +553,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'protection.coverageNote':
       'Nijedan nivo ne zaustavlja sve. Aplikacije koje zaobilaze sistemski pregled, QUIC/HTTP3 saobraćaj i servisi sa ugrađenim certifikatom uvijek propuste dio. Navedene brojke su iz mjerenja, ne obećanje.',
     'protection.adsBlockedNote':
-      'Broji zahtjeve zaustavljene na DNS nivou. Reklame unutar aplikacija i u video sadržaju se ovako ne vide.',
+      'Broji zahtjeve zaustavljene na DNS nivou — reklame se ne uklanjaju sa stranice, pa dio može ostati vidljiv. Reklame unutar aplikacija i u video sadržaju se ovako ne vide.',
     'protection.standardDescription':
       'Filtriranje na nivou DNS-a. Zaustavlja oko 64% poznatih domena za reklame i praćenje. Certifikat nije potreban.',
     'protection.levelSectionLabel': 'NIVO ZAŠTITE',
@@ -620,6 +635,107 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Dostignut je limit kapaciteta',
     'notifications.capacityMessage':
       'Vaš Fornect uređaj podržava najviše {capacity} uređaja. Novi uređaji se neće moći dodati dok se neki ne ukloni.',
+    'notifications.newDeviceTitle': 'Nov uređaj na mreži',
+    'notifications.newDeviceMessage':
+      'Uređaj „{name}" ({mac}) se pojavio na mreži i čeka vašu odluku. Do tada ima osnovnu zaštitu.',
+    'notifications.consentFailedTitle': 'Puna zaštita nije uključena',
+    'notifications.consentFailedMessage':
+      'Na uređaju „{name}" pristanak je dat, ali instalacija certifikata nije prošla. Uređaj je ostao na osnovnoj zaštiti.',
+    'notifications.reconsentTitle': 'Pristanak treba obnoviti',
+    'notifications.reconsentMessage':
+      'Politika je izmijenjena (verzija {version}). Uređaji sa pristankom datim po ranijim uslovima ({count}): {names}. Da bi puna zaštita na njima ostala u primjeni, politiku treba ponovo prihvatiti.',
+
+    'portalBranding.eyebrow': 'MREŽA',
+    'portalBranding.title': 'Tekst i brend portala',
+    'portalBranding.subtitle':
+      'Ovo vide uređaji koji se prvi put spoje na vašu mrežu.',
+    'portalBranding.backToSettings': 'Nazad na postavke',
+    'portalBranding.loading': 'Učitavanje…',
+    'fleet.eyebrow': 'FLOTA',
+    'fleet.title': 'Ažuriranje uređaja',
+    'fleet.subtitle':
+      'Kada se uređaji ažuriraju, kojim redom, i koje filter liste koriste.',
+    'fleet.backToSettings': 'Nazad na postavke',
+    'fleet.loading': 'Učitavanje…',
+    'fleet.saved': 'Sačuvano.',
+    'fleet.saveFailed': 'Snimanje nije uspjelo. Pokušajte ponovo.',
+    'fleet.loadFailed': 'Podaci o flotu se ne mogu učitati.',
+    'fleet.online': 'Na vezi',
+    'fleet.offline': 'Nije na vezi',
+    'fleet.pausedBadge': 'Ažuriranje pauzirano',
+    'fleet.noHubTitle': 'Nema uparenog uređaja',
+    'fleet.noHubBody':
+      'Ažuriranje se podešava po Fornect uređaju. Uparite uređaj pa se ovdje pojavi.',
+    'fleet.versionsTitle': 'Verzije na uređaju',
+    'fleet.versionsPending':
+      'Uređaj još ne prijavljuje verzije. Prikazaćemo ih čim ih pošalje u heartbeat-u — do tada ovdje nema šta pisati, a izmišljena verzija bi bila gora od prazne.',
+    'fleet.ringTitle': 'Prsten ažuriranja',
+    'fleet.ringHint':
+      'Nova verzija prvo ide na klupu, pa na mali dio uređaja, pa na sve. Loše ažuriranje se tako zaustavi prije nego zahvati sve.',
+    'fleet.ring.bench': 'Klupa',
+    'fleet.ring.early': 'Prvih 5%',
+    'fleet.ring.half': 'Polovina',
+    'fleet.ring.all': 'Svi',
+    'fleet.windowTitle': 'Prozor održavanja',
+    'fleet.windowHint':
+      'Uređaj se ažurira samo u ovom razmaku, po lokalnom vremenu vašeg naloga. Prozor smije prelaziti ponoć.',
+    'fleet.windowStart': 'Od',
+    'fleet.windowEnd': 'Do',
+    'fleet.killTitle': 'Zaustavljanje ažuriranja',
+    'fleet.killHintRunning':
+      'Uređaj prima nova ažuriranja u prozoru održavanja.',
+    'fleet.killHintPaused':
+      'Uređaj ne prima nova ažuriranja. Ono što je već instalirano ostaje kako jeste.',
+    'fleet.pause': 'Pauziraj ažuriranje',
+    'fleet.resume': 'Nastavi ažuriranje',
+    'fleet.listsTitle': 'Filter liste',
+    'fleet.listUnnamed': 'Set bez oznake',
+    'fleet.listCount': '{count} lista',
+    'fleet.listNone':
+      'Panel nema set lista za ovaj uređaj, pa uređaj koristi svoj ugrađeni.',
+    'fleet.listFromRollback': 'Ovo je vraćen raniji set.',
+    'fleet.listLabel': 'Oznaka seta',
+    'fleet.listUrls': 'Adrese lista, jedna po redu',
+    'fleet.listUrlsHint':
+      'Samo https. Lista preko običnog http-a je lista koju neko na putu može zamijeniti — a ona određuje i šta se NE blokira.',
+    'fleet.editLists': 'Uredi liste',
+    'fleet.rollback': 'Vrati prethodni set',
+    'fleet.rollbackUnavailable':
+      'Nema ranijeg seta na koji bi se moglo vratiti.',
+    'fleet.directSourceWarning':
+      'Ove adrese se povlače direktno sa izvora. Za nekoliko uređaja to radi; za flotu ide naš mirror, jer direktan izvor uvede ograničenje broja zahtjeva i ostavi uređaje bez osvježene liste.',
+    'fleet.configDelivered': 'Uređaj je potvrdio postavke (verzija {version}).',
+    'fleet.configPending':
+      'Postavke su snimljene (verzija {version}), ali ih uređaj još nije potvrdio.',
+    'fleet.configNone':
+      'Za ovaj uređaj još nije upisana nijedna konfiguracija, pa nema ni čega da stigne.',
+    'fleet.missingTitle': 'Šta ovdje namjerno ne stoji',
+    'fleet.missingBody':
+      'Zdravstveni pregled flote — stopa blokiranja, greške na proxyju i broj pokušaja pokretanja — nije ovdje jer uređaj te podatke još ne šalje. Ekran koji ih crta prikazivao bi nule koje se ne razlikuju od stvarnih nula, a na osnovu takvog broja neko donese odluku.',
+    'portalBranding.previewTitle': 'Kako će izgledati',
+    'portalBranding.previewHint':
+      'Prikazano je samo ono što ovdje mijenjate — zaglavlje, naslov i poruka. Ostatak portala (izbor zaštite, uputstvo za certifikat) je isti za sve i ne mijenja se.',
+    'portalBranding.brandSection': 'Brend',
+    'portalBranding.brandName': 'Naziv koji stoji na vrhu',
+    'portalBranding.accentColor': 'Boja naglaska',
+    'portalBranding.textSection': 'Tekst dobrodošlice',
+    'portalBranding.textHint':
+      'Portal govori jezikom gosta, a ne vašim — zato se tekst unosi na oba jezika.',
+    'portalBranding.titleBs': 'Naslov (bosanski)',
+    'portalBranding.messageBs': 'Poruka (bosanski)',
+    'portalBranding.titleEn': 'Naslov (engleski)',
+    'portalBranding.messageEn': 'Poruka (engleski)',
+    'portalBranding.privacyUrl': 'Veza ka politici privatnosti',
+    'portalBranding.privacyUrlHint':
+      'Prikazuje se uz formu pristanka na portalu. GDPR traži da politika bude dostupna u trenutku kad se pristanak daje — pristanak bez uvida u to šta se sa podacima radi nije informisan pristanak. Prazno znači da se ne prikazuje ništa.',
+    'portalBranding.supportContact': 'Kontakt u podnožju',
+    'portalBranding.supportHint':
+      'Prazno znači da se kontakt ne prikazuje.',
+    'portalBranding.lockedTitle': 'Šta se ovdje ne može mijenjati',
+    'portalBranding.lockedBody':
+      'Brojke o dometu zaštite, njihove granice i uputstvo za instalaciju certifikata nisu podesivi. To su tvrdnje za koje Fornect odgovara, pa moraju biti iste svuda i provjerljive.',
+    'portalBranding.savedWithVersion':
+      'Sačuvano. Uređaji će preuzeti verziju {version}.',
 
     'newDevices.eyebrow': 'MREŽA',
     'newDevices.title': 'Novi uređaji',
@@ -1031,6 +1147,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
   en: {
     'common.backToDashboard': 'Back to dashboard',
     'common.save': 'Save',
+    'common.cancel': 'Cancel',
     'common.saved': 'Saved',
     'common.on': 'On',
     'common.off': 'Off',
@@ -1255,8 +1372,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Android phone',
     'protection.platformIos':
       'iPhone or iPad',
-    'protection.platformDesktop':
-      'Computer',
+    'protection.platformWindows':
+      'Windows',
+    'protection.platformMac':
+      'Mac',
     'protection.androidStep1':
       'On the device you are protecting, open this page and download the Fornect certificate.',
     'protection.androidStep2':
@@ -1283,18 +1402,30 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Come back here and confirm that the profile is installed.',
     'protection.iosNote':
       'The trust settings step is required. Without it the iPhone will not use full protection.',
-    'protection.desktopStep1':
+    'protection.windowsStep1':
       'Download the Fornect certificate to your computer.',
-    'protection.desktopStep2':
-      'Open the downloaded file with a double click.',
-    'protection.desktopStep3':
-      'Choose to install it among the trusted system certificates.',
-    'protection.desktopStep4':
-      'Close and reopen your web browser.',
-    'protection.desktopStep5':
+    'protection.windowsStep2':
+      'Double-click the downloaded file, then choose “Install Certificate”.',
+    'protection.windowsStep3':
+      'Choose “Local Machine” and approve the system prompt.',
+    'protection.windowsStep4':
+      'Choose “Place all certificates in the following store”, select “Trusted Root Certification Authorities” and confirm.',
+    'protection.windowsStep5':
       'Come back here and confirm that the profile is installed.',
-    'protection.desktopNote':
-      'Some browsers keep their own certificate list, so the certificate needs to be added to the browser as well.',
+    'protection.windowsNote':
+      'Chrome and Edge use the system certificate list, so this is enough for them. Firefox keeps its own list and has to be handled separately, in its settings.',
+    'protection.macStep1':
+      'Download the Fornect certificate to your Mac.',
+    'protection.macStep2':
+      'Double-click the downloaded file — Keychain Access opens.',
+    'protection.macStep3':
+      'Choose the “System” keychain and enter your administrator password.',
+    'protection.macStep4':
+      'Find Fornect in the list, double-click it, open the “Trust” section and set “When using this certificate” to “Always Trust”.',
+    'protection.macStep5':
+      'Come back here and confirm that the profile is installed.',
+    'protection.macNote':
+      'Safari and Chrome use the system keychain. Firefox keeps its own list and has to be handled separately, in its settings.',
     'protection.pinningNote':
       'Some apps, such as banking apps, deliberately refuse this kind of protection. They keep standard protection - this is expected and not an error.',
 
@@ -1328,7 +1459,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'devices.limitReachedTitle':
       'Licence capacity exceeded',
     'devices.limitReachedDescription':
-      'Your Fornect device licence covers {limit} devices. {count} are beyond it — they work on the network, but Fornect does not protect them.',
+      'Your Fornect device licence covers {limit} devices. {count} are beyond it — they are not registered and get no service until a slot frees up.',
     'devices.limitReachedAction':
       'See details',
 
@@ -1338,9 +1469,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Devices on the network: {used}. The licence covers {capacity}.',
     'capacity.whatItMeans': 'What this means',
     'capacity.explanation':
-      'Your Fornect device licence covers a set number of devices. Those that appeared after that number stay on the network, but Fornect does not protect them — their traffic is not filtered and no profile or schedule is applied.',
+      'Your Fornect device licence covers a set number of devices. Those that appeared after that number are not registered, so Fornect gives them no service — no name resolution and no filtering. Without that they have no internet access through this network.',
     'capacity.notBlockedNote':
-      'The panel does not remove a device from the network. Blocking at the network level is the Fornect device’s job; here you only see who is left without protection.',
+      'The limit is enforced when a device is registered — here, not in DNS and not in the proxy. The Fornect device additionally watches that the number of active devices stays within the licence.',
     'capacity.overflowTitle': 'Beyond the licence: {count}',
     'capacity.slot': 'Slot',
     'capacity.openDevice': 'Open device',
@@ -1560,7 +1691,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'protection.coverageNote':
       'No level stops everything. Apps that bypass system inspection, QUIC/HTTP3 traffic and services with pinned certificates always let some through. The figures above come from measurements, not a promise.',
     'protection.adsBlockedNote':
-      'Counts requests stopped at the DNS level. Advertising inside apps and inside video is not visible this way.',
+      'Counts requests stopped at the DNS level — ads are not removed from the page, so part of one can stay visible. Advertising inside apps and inside video is not visible this way.',
     'protection.standardDescription':
       'Filtering at the DNS level. Stops around 64% of known advertising and tracking domains. No certificate needed.',
     'protection.levelSectionLabel': 'PROTECTION LEVEL',
@@ -1642,6 +1773,105 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Capacity limit reached',
     'notifications.capacityMessage':
       'Your Fornect device supports up to {capacity} devices. New devices cannot be added until one is removed.',
+    'notifications.newDeviceTitle': 'New device on the network',
+    'notifications.newDeviceMessage':
+      'The device “{name}” ({mac}) appeared on the network and is waiting for your decision. Until then it has basic protection.',
+    'notifications.consentFailedTitle': 'Full protection is not on',
+    'notifications.consentFailedMessage':
+      'On “{name}” consent was given, but the certificate installation did not go through. The device stayed on basic protection.',
+    'notifications.reconsentTitle': 'Consent needs renewing',
+    'notifications.reconsentMessage':
+      'The policy has changed (version {version}). Devices with consent given under the earlier terms ({count}): {names}. To keep full protection in effect on them, the policy needs to be accepted again.',
+
+    'portalBranding.eyebrow': 'NETWORK',
+    'portalBranding.title': 'Portal text and branding',
+    'portalBranding.subtitle':
+      'This is what devices see when they first join your network.',
+    'portalBranding.backToSettings': 'Back to settings',
+    'portalBranding.loading': 'Loading…',
+    'fleet.eyebrow': 'FLEET',
+    'fleet.title': 'Device updates',
+    'fleet.subtitle':
+      'When devices update, in what order, and which filter lists they use.',
+    'fleet.backToSettings': 'Back to settings',
+    'fleet.loading': 'Loading…',
+    'fleet.saved': 'Saved.',
+    'fleet.saveFailed': 'Saving failed. Please try again.',
+    'fleet.loadFailed': 'Fleet data could not be loaded.',
+    'fleet.online': 'Online',
+    'fleet.offline': 'Offline',
+    'fleet.pausedBadge': 'Updates paused',
+    'fleet.noHubTitle': 'No paired device',
+    'fleet.noHubBody':
+      'Updates are configured per Fornect device. Pair one and it will appear here.',
+    'fleet.versionsTitle': 'Versions on the device',
+    'fleet.versionsPending':
+      'The device does not report versions yet. They will appear as soon as it sends them in a heartbeat — until then there is nothing to write here, and an invented version would be worse than none.',
+    'fleet.ringTitle': 'Rollout ring',
+    'fleet.ringHint':
+      'A new version goes to the bench first, then to a small share of devices, then to all. A bad update is stopped before it reaches everyone.',
+    'fleet.ring.bench': 'Bench',
+    'fleet.ring.early': 'First 5%',
+    'fleet.ring.half': 'Half',
+    'fleet.ring.all': 'All',
+    'fleet.windowTitle': 'Maintenance window',
+    'fleet.windowHint':
+      'The device updates only within this range, in your account’s local time. The window may cross midnight.',
+    'fleet.windowStart': 'From',
+    'fleet.windowEnd': 'To',
+    'fleet.killTitle': 'Stopping updates',
+    'fleet.killHintRunning': 'The device accepts new updates during the maintenance window.',
+    'fleet.killHintPaused':
+      'The device accepts no new updates. What is already installed stays as it is.',
+    'fleet.pause': 'Pause updates',
+    'fleet.resume': 'Resume updates',
+    'fleet.listsTitle': 'Filter lists',
+    'fleet.listUnnamed': 'Unlabelled set',
+    'fleet.listCount': '{count} lists',
+    'fleet.listNone':
+      'The panel has no list set for this device, so the device uses its built-in one.',
+    'fleet.listFromRollback': 'This is a restored earlier set.',
+    'fleet.listLabel': 'Set label',
+    'fleet.listUrls': 'List addresses, one per line',
+    'fleet.listUrlsHint':
+      'https only. A list fetched over plain http is a list someone on the path can replace — and it decides what is NOT blocked, too.',
+    'fleet.editLists': 'Edit lists',
+    'fleet.rollback': 'Restore previous set',
+    'fleet.rollbackUnavailable': 'There is no earlier set to restore.',
+    'fleet.directSourceWarning':
+      'These addresses are fetched straight from the source. That works for a few devices; a fleet goes through our mirror, because a direct source rate-limits and leaves devices without a refreshed list.',
+    'fleet.configDelivered': 'The device has confirmed these settings (version {version}).',
+    'fleet.configPending':
+      'Settings are saved (version {version}), but the device has not confirmed them yet.',
+    'fleet.configNone':
+      'No configuration has been written for this device yet, so there is nothing to arrive.',
+    'fleet.missingTitle': 'What is deliberately not here',
+    'fleet.missingBody':
+      'A fleet health view — block rate, proxy errors and boot attempts — is not here because the device does not send that data yet. A screen drawing it would show zeros indistinguishable from real zeros, and someone would make a decision on that number.',
+    'portalBranding.previewTitle': 'How it will look',
+    'portalBranding.previewHint':
+      'Only what you change here is shown — the header, title and message. The rest of the portal (the protection choice, the certificate instructions) is the same for everyone and does not change.',
+    'portalBranding.brandSection': 'Branding',
+    'portalBranding.brandName': 'Name shown at the top',
+    'portalBranding.accentColor': 'Accent colour',
+    'portalBranding.textSection': 'Welcome text',
+    'portalBranding.textHint':
+      'The portal speaks the guest’s language, not yours — so the text is entered in both.',
+    'portalBranding.titleBs': 'Title (Bosnian)',
+    'portalBranding.messageBs': 'Message (Bosnian)',
+    'portalBranding.titleEn': 'Title (English)',
+    'portalBranding.messageEn': 'Message (English)',
+    'portalBranding.privacyUrl': 'Link to the privacy policy',
+    'portalBranding.privacyUrlHint':
+      'Shown next to the consent form on the portal. GDPR requires the policy to be available at the moment consent is given — consent without sight of what happens to the data is not informed consent. Leave empty to show nothing.',
+    'portalBranding.supportContact': 'Contact in the footer',
+    'portalBranding.supportHint':
+      'Leave empty to show no contact.',
+    'portalBranding.lockedTitle': 'What cannot be changed here',
+    'portalBranding.lockedBody':
+      'The protection coverage figures, their limits and the certificate instructions are not configurable. Those are claims Fornect answers for, so they have to be the same everywhere and verifiable.',
+    'portalBranding.savedWithVersion':
+      'Saved. Devices will pick up version {version}.',
 
     'newDevices.eyebrow': 'NETWORK',
     'newDevices.title': 'New devices',

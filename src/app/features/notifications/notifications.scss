@@ -195,6 +195,19 @@
   color: #92400e;
 }
 
+// Nov uređaj je pitanje, ne uzbuna — plavo, ne crveno.
+.notification-icon--new-device {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+// Pristanak koji nije prošao jeste uzbuna: čovjek misli da je
+// zaštićen, a nije.
+.notification-icon--consent {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 @media (max-width: 650px) {
   .topbar {
     padding: 22px 18px;

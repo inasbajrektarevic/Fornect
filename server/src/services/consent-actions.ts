@@ -13,7 +13,9 @@
 import type { PoolClient } from 'pg';
 
 import { CONSENT_POLICY_VERSION } from './consent-policy';
-import { syncConsentedMacs } from './device-config-sync';
+import { syncDeviceConfig } from './device-config-sync';
+
+import { recordConsentFailure, resolveConsentFailure } from './notifications';
 
 export interface ConsentRecordRow {
   id: string;
@@ -170,7 +172,7 @@ export async function grantConsent(
   // Ako je uređaj do sada bio 'paired', izlazak iz tog stanja mora se
   // odraziti na consented_macs.
   if (device.pairing_state === 'paired') {
-    await syncConsentedMacs(client, device.account_id, device.fornect_device_id);
+    await syncDeviceConfig(client, device.account_id, device.fornect_device_id);
   }
 
   return { ok: true, record: rows[0]! };
@@ -228,7 +230,11 @@ export async function verifyConsent(
     );
 
     // Tek sada uređaj ulazi u nftables set na hub-u.
-    await syncConsentedMacs(client, device.account_id, device.fornect_device_id);
+    await syncDeviceConfig(client, device.account_id, device.fornect_device_id);
+
+    // Instalacija je na kraju prošla — ranija poruka o neuspjehu više
+    // nije tačna i mora nestati, ne stajati kao trajna optužba.
+    await resolveConsentFailure(client, device.account_id, device.id);
   } else {
     await client.query(
       `UPDATE consent_records
@@ -243,6 +249,16 @@ export async function verifyConsent(
     await client.query(`UPDATE network_devices SET pairing_state = 'failed' WHERE id = $1`, [
       device.id,
     ]);
+
+    // Čovjek je pristao i mislio da je gotovo. Bez ovoga ostaje u
+    // uvjerenju da je puna zaštita uključena, a nije.
+    await recordConsentFailure(
+      client,
+      device.account_id,
+      device.id,
+      device.name ?? device.mac_address,
+      input.error?.trim() ?? null,
+    );
   }
 
   return { ok: true, record: await reload(client, active.id) };
@@ -281,7 +297,7 @@ export async function revokeConsent(
     [device.id],
   );
 
-  await syncConsentedMacs(client, device.account_id, device.fornect_device_id);
+  await syncDeviceConfig(client, device.account_id, device.fornect_device_id);
 
   return { ok: true, record: await reload(client, active.id) };
 }

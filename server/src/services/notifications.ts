@@ -25,7 +25,13 @@ import type { PoolClient } from 'pg';
 
 import { isPausedAt } from './schedule-window';
 
-export type NotificationType = 'offline' | 'update' | 'protection' | 'capacity';
+export type NotificationType =
+  | 'offline'
+  | 'update'
+  | 'protection'
+  | 'capacity'
+  | 'new-device'
+  | 'consent';
 
 export interface NotificationRow {
   id: string;
@@ -181,6 +187,175 @@ export async function syncCapacityNotice(
     titleKey: 'notifications.capacityReached',
     messageKey: 'notifications.capacityMessage',
     params: { capacity },
+    dedupeKey,
+  });
+}
+
+/**
+ * Nepoznat uređaj se pojavio na mreži.
+ *
+ * STANJE, ne događaj: stoji dok neko ne odluči šta je taj uređaj, i
+ * sklanja se kad odluka padne. Zato `dedupeKey` nosi MAC adresu — hub
+ * koji ponovo digne mrežu javi sve što vidi, i to ne smije napraviti
+ * drugo obavještenje o istom uređaju.
+ *
+ * Ime uređaja ide u `params`, ne kao veza na red u bazi, iz istog
+ * razloga kao kod odlaska sa mreže: uređaj obrisan iz liste ne smije
+ * ostaviti obavještenje koje govori o „nepoznatom uređaju".
+ */
+export async function recordNewDeviceNotice(
+  client: PoolClient,
+  accountId: string,
+  networkDeviceId: string,
+  mac: string,
+  name: string,
+): Promise<void> {
+  await createNotification(client, accountId, {
+    type: 'new-device',
+    titleKey: 'notifications.newDeviceTitle',
+    messageKey: 'notifications.newDeviceMessage',
+    params: { name, mac },
+    dedupeKey: `new-device:${mac}`,
+    networkDeviceId,
+  });
+}
+
+/**
+ * Sklanja obavještenja o uređajima o kojima je odluka u međuvremenu
+ * pala.
+ *
+ * Namjerno se vezuje za STANJE uređaja, a ne za mjesto u kodu gdje je
+ * odluka donesena. Odluka pada na četiri mjesta: pristanak, svrstavanje
+ * među goste iz panela, isto to sa hub-a, i automatsko svrstavanje
+ * poslije N sati (koje je grupni UPDATE, bez petlje po uređajima). Da
+ * se poziv kalemi na svako od njih, peto mjesto koje neko doda sutra
+ * ostavilo bi obavještenje da visi.
+ *
+ * Računa se pri čitanju, kao kapacitet i prisutnost — bez posla u
+ * pozadini koji može stati a da to niko ne primijeti.
+ */
+export async function resolveClassifiedDeviceNotices(
+  client: PoolClient,
+  accountId: string,
+): Promise<void> {
+  await client.query(
+    `UPDATE notifications n
+     SET resolved_at = now()
+     WHERE n.account_id = $1
+       AND n.type = 'new-device'
+       AND n.resolved_at IS NULL
+       AND (
+         n.network_device_id IS NULL
+         OR EXISTS (
+           SELECT 1 FROM network_devices nd
+           WHERE nd.id = n.network_device_id
+             AND nd.pairing_state <> 'unpaired'
+         )
+       )`,
+    [accountId],
+  );
+}
+
+/**
+ * Provjera certifikata nije uspjela.
+ *
+ * Ovo je jedino obavještenje koje govori o nečemu što je korisnik
+ * ZAPOČEO pa nije završio: pristanak je dat, instalacija nije prošla,
+ * uređaj je ostao na osnovnoj zaštiti. Bez javljanja, čovjek ostaje u
+ * uvjerenju da je puna zaštita uključena — a to je tačno ona vrsta
+ * tihe rupe zbog koje se obećanje o zaštiti ne može održati.
+ *
+ * STANJE: sklanja se čim provjera prođe.
+ */
+export async function recordConsentFailure(
+  client: PoolClient,
+  accountId: string,
+  networkDeviceId: string,
+  name: string,
+  reason: string | null,
+): Promise<void> {
+  await createNotification(client, accountId, {
+    type: 'consent',
+    titleKey: 'notifications.consentFailedTitle',
+    messageKey: 'notifications.consentFailedMessage',
+    params: { name, reason: reason ?? '' },
+    dedupeKey: `consent-failed:${networkDeviceId}`,
+    networkDeviceId,
+  });
+}
+
+export async function resolveConsentFailure(
+  client: PoolClient,
+  accountId: string,
+  networkDeviceId: string,
+): Promise<void> {
+  await resolveNotification(client, accountId, `consent-failed:${networkDeviceId}`);
+}
+
+/**
+ * Uređaji čiji je pristanak dat na stariju verziju politike.
+ *
+ * Do sada se to vidjelo samo na ekranu pojedinačnog uređaja — pa je
+ * vlasnik sa deset uređaja morao otvoriti svaki da sazna koji traži
+ * ponovno prihvatanje. Poslije promjene politike to su svi uređaji sa
+ * punom zaštitom odjednom, a upravo tada je zbirni pregled potreban.
+ *
+ * STANJE: nestaje kad posljednji uređaj obnovi pristanak.
+ *
+ * Za razliku od kapaciteta, ovdje se broj MIJENJA dok obavještenje
+ * stoji — ljudi obnavljaju pristanak jedan po jedan. `createNotification`
+ * preskače upis kad isto već postoji, pa bi broj ostao zamrznut na prvoj
+ * vrijednosti: „3 uređaja" i kad je ostao jedan. Zato se postojeće
+ * obavještenje osvježava na mjestu. Ne pravi se novo, jer bi svako
+ * obnavljanje donijelo novo nepročitano obavještenje o istoj stvari.
+ */
+export async function syncReconsentNotice(
+  client: PoolClient,
+  accountId: string,
+  currentPolicyVersion: string,
+): Promise<void> {
+  const dedupeKey = 'policy-reconsent';
+
+  const { rows } = await client.query<{ name: string }>(
+    `SELECT nd.name
+     FROM consent_records cr
+     JOIN network_devices nd ON nd.id = cr.network_device_id
+     WHERE cr.account_id = $1
+       AND cr.revoked_at IS NULL
+       AND cr.policy_version <> $2
+     ORDER BY nd.name`,
+    [accountId, currentPolicyVersion],
+  );
+
+  if (rows.length === 0) {
+    await resolveNotification(client, accountId, dedupeKey);
+
+    return;
+  }
+
+  // Najviše pet imena. Tri tačke su iste na oba jezika, pa server ne
+  // mora znati jezik korisnika da bi skratio listu.
+  const shown = rows.slice(0, 5).map((row) => row.name);
+  const names = rows.length > 5 ? `${shown.join(', ')}, …` : shown.join(', ');
+
+  const params = { count: rows.length, names, version: currentPolicyVersion };
+
+  const { rowCount } = await client.query(
+    `UPDATE notifications
+     SET params = $3::jsonb
+     WHERE account_id = $1 AND dedupe_key = $2 AND resolved_at IS NULL`,
+    [accountId, dedupeKey, JSON.stringify(params)],
+  );
+
+  if (rowCount) {
+    return;
+  }
+
+  await createNotification(client, accountId, {
+    type: 'consent',
+    titleKey: 'notifications.reconsentTitle',
+    messageKey: 'notifications.reconsentMessage',
+    params,
     dedupeKey,
   });
 }

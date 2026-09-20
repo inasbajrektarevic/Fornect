@@ -9,7 +9,8 @@ import type { PoolClient } from 'pg';
 
 import { pool } from '../db';
 import { applyAutoGuestPolicy } from '../services/auto-guest';
-import { syncConsentedMacs } from '../services/device-config-sync';
+import { syncDeviceConfig } from '../services/device-config-sync';
+import { normaliseMac } from '../services/mac';
 import {
   getAccountTimeZone,
   offlineAlertEnabled,
@@ -150,6 +151,17 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       return reply.code(400).send({ error: 'mac_address i name su obavezni.' });
     }
 
+    // Isti oblik kao sa huba (services/mac.ts). Bez ovoga je uređaj koji
+    // vlasnik doda velikim slovima za hub nevidljiv, a kad ga hub javi
+    // kao nov, postane drugi uređaj i uzme drugo mjesto u licenci.
+    const macAddress = normaliseMac(body.mac_address);
+
+    if (!macAddress) {
+      return reply
+        .code(400)
+        .send({ error: 'mac_address mora biti MAC adresa, npr. aa:bb:cc:dd:ee:ff.' });
+    }
+
     const client = await pool.connect();
 
     try {
@@ -168,6 +180,7 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
 
       const resolvedBody: CreateBody = {
         ...body,
+        mac_address: macAddress,
         fornect_device_id: hubRows[0]?.id ?? null,
       };
 
@@ -187,7 +200,7 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       const created = rows[0]!;
 
       if (created.pairing_state === 'paired') {
-        await syncConsentedMacs(client, created.account_id, created.fornect_device_id);
+        await syncDeviceConfig(client, created.account_id, created.fornect_device_id);
       }
 
       await client.query('COMMIT');
@@ -308,7 +321,7 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       }
 
       if (deleted.pairing_state === 'paired') {
-        await syncConsentedMacs(client, deleted.account_id, deleted.fornect_device_id);
+        await syncDeviceConfig(client, deleted.account_id, deleted.fornect_device_id);
       }
 
       await client.query('COMMIT');
@@ -337,10 +350,10 @@ async function syncIfPairingChanged(
 
   // Ako se hub promijenio u istom PATCH-u dok je i dalje uparen, treba
   // osvježiti listu i na starom i na novom hub-u.
-  await syncConsentedMacs(client, after.account_id, after.fornect_device_id);
+  await syncDeviceConfig(client, after.account_id, after.fornect_device_id);
 
   if (before.fornect_device_id && before.fornect_device_id !== after.fornect_device_id) {
-    await syncConsentedMacs(client, before.account_id, before.fornect_device_id);
+    await syncDeviceConfig(client, before.account_id, before.fornect_device_id);
   }
 }
 

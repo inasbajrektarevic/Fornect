@@ -10,7 +10,14 @@
 import type { FastifyInstance } from 'fastify';
 
 import { pool } from '../db';
-import { syncCapacityNotice, type NotificationRow } from '../services/notifications';
+import { CONSENT_POLICY_VERSION } from '../services/consent-policy';
+
+import {
+  resolveClassifiedDeviceNotices,
+  syncCapacityNotice,
+  syncReconsentNotice,
+  type NotificationRow,
+} from '../services/notifications';
 
 // Lista je pregled, ne arhiva. Dublja historija ima smisla tek kada
 // postoji ekran koji je traži.
@@ -23,6 +30,15 @@ export async function notificationRoutes(fastify: FastifyInstance): Promise<void
     try {
       // Kapacitet se računa pri čitanju, kao i politika gostiju.
       await syncCapacityNotice(client, request.accountId!);
+
+      // Isto i za uređaje koji su u međuvremenu klasifikovani: lista
+      // koja nudi odluku o uređaju o kojem je odluka već pala tjera
+      // čovjeka da otvori ekran i vidi da nema šta da radi — pa
+      // sljedeći put neće ni otvoriti.
+      await resolveClassifiedDeviceNotices(client, request.accountId!);
+
+      // I pristanci dati na stariju verziju politike, zbirno.
+      await syncReconsentNotice(client, request.accountId!, CONSENT_POLICY_VERSION);
 
       const { rows } = await client.query<NotificationRow>(
         `SELECT * FROM notifications

@@ -1,0 +1,200 @@
+<div class="branding-page">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">
+        {{ 'portalBranding.eyebrow' | translate }}
+      </p>
+
+      <h1>
+        {{ 'portalBranding.title' | translate }}
+      </h1>
+
+      <p class="subtitle">
+        {{ 'portalBranding.subtitle' | translate }}
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="back-button"
+      routerLink="/settings">
+      {{ 'portalBranding.backToSettings' | translate }}
+    </button>
+  </header>
+
+  <main class="content">
+    @if (form(); as form) {
+      <section class="card">
+        <h2>{{ 'portalBranding.previewTitle' | translate }}</h2>
+
+        <p class="hint">
+          {{ 'portalBranding.previewHint' | translate }}
+        </p>
+
+        <div class="preview">
+          <div class="preview-head">
+            <strong [style.color]="form.accentColor">
+              {{ form.brandName }}
+            </strong>
+
+            <button
+              type="button"
+              class="preview-lang"
+              (click)="togglePreviewLanguage()">
+              {{ previewLanguage() === 'bs' ? 'EN' : 'BS' }}
+            </button>
+          </div>
+
+          <h3>{{ previewTitle() }}</h3>
+          <p>{{ previewMessage() }}</p>
+
+          @if (form.supportContact) {
+            <p class="preview-support">{{ form.supportContact }}</p>
+          }
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>{{ 'portalBranding.brandSection' | translate }}</h2>
+
+        <label class="field">
+          <span>{{ 'portalBranding.brandName' | translate }}</span>
+
+          <input
+            type="text"
+            [ngModel]="form.brandName"
+            (ngModelChange)="update('brandName', $event)"
+            name="brandName"
+            maxlength="40" />
+        </label>
+
+        <label class="field field--color">
+          <span>{{ 'portalBranding.accentColor' | translate }}</span>
+
+          <input
+            type="color"
+            [ngModel]="form.accentColor"
+            (ngModelChange)="update('accentColor', $event)"
+            name="accentColor" />
+
+          <code>{{ form.accentColor }}</code>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>{{ 'portalBranding.textSection' | translate }}</h2>
+
+        <p class="hint">
+          {{ 'portalBranding.textHint' | translate }}
+        </p>
+
+        <label class="field">
+          <span>{{ 'portalBranding.titleBs' | translate }}</span>
+
+          <input
+            type="text"
+            [ngModel]="form.welcomeTitleBs"
+            (ngModelChange)="update('welcomeTitleBs', $event)"
+            name="titleBs"
+            maxlength="80" />
+        </label>
+
+        <label class="field">
+          <span>{{ 'portalBranding.messageBs' | translate }}</span>
+
+          <textarea
+            rows="3"
+            [ngModel]="form.welcomeMessageBs"
+            (ngModelChange)="update('welcomeMessageBs', $event)"
+            name="messageBs"
+            maxlength="300"></textarea>
+        </label>
+
+        <label class="field">
+          <span>{{ 'portalBranding.titleEn' | translate }}</span>
+
+          <input
+            type="text"
+            [ngModel]="form.welcomeTitleEn"
+            (ngModelChange)="update('welcomeTitleEn', $event)"
+            name="titleEn"
+            maxlength="80" />
+        </label>
+
+        <label class="field">
+          <span>{{ 'portalBranding.messageEn' | translate }}</span>
+
+          <textarea
+            rows="3"
+            [ngModel]="form.welcomeMessageEn"
+            (ngModelChange)="update('welcomeMessageEn', $event)"
+            name="messageEn"
+            maxlength="300"></textarea>
+        </label>
+
+        <label class="field">
+          <span>{{ 'portalBranding.privacyUrl' | translate }}</span>
+
+          <input
+            type="text"
+            [ngModel]="form.privacyPolicyUrl"
+            (ngModelChange)="update('privacyPolicyUrl', $event)"
+            name="privacyPolicyUrl"
+            inputmode="url"
+            maxlength="300"
+            placeholder="https://" />
+
+          <small>{{ 'portalBranding.privacyUrlHint' | translate }}</small>
+        </label>
+
+        <label class="field">
+          <span>{{ 'portalBranding.supportContact' | translate }}</span>
+
+          <input
+            type="text"
+            [ngModel]="form.supportContact"
+            (ngModelChange)="update('supportContact', $event)"
+            name="supportContact"
+            maxlength="120" />
+
+          <small>{{ 'portalBranding.supportHint' | translate }}</small>
+        </label>
+      </section>
+
+      <!-- Granica koja se ne podešava, i mora se vidjeti da se ne
+           podešava — inače bi neko tražio gdje se to mijenja. -->
+      <section class="card card--locked">
+        <h2>{{ 'portalBranding.lockedTitle' | translate }}</h2>
+
+        <p>{{ 'portalBranding.lockedBody' | translate }}</p>
+      </section>
+
+      <div class="actions">
+        @if (error()) {
+          <p class="error">{{ error() }}</p>
+        }
+
+        @if (saved()) {
+          <p class="ok">
+            {{
+              'portalBranding.savedWithVersion'
+                | translate:{ version: form.version }
+            }}
+          </p>
+        }
+
+        <button
+          type="button"
+          class="primary-button"
+          [disabled]="busy()"
+          (click)="save()">
+          {{ 'common.save' | translate }}
+        </button>
+      </div>
+    } @else {
+      <div class="card">
+        <p>{{ 'portalBranding.loading' | translate }}</p>
+      </div>
+    }
+  </main>
+</div>
