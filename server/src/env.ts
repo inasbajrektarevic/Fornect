@@ -40,6 +40,17 @@ export const env = {
   // komentar koji je govorio „tri" bio je netačan čim ih je bilo osam.
   deviceRegisterMaxPerHour: Number(process.env['DEVICE_REGISTER_MAX_PER_HOUR'] ?? 10),
 
+  // Koliko pokušaja uparivanja huba (unos 6-cifrenog koda) po IP-u na
+  // sat. Kod ima milion mogućnosti i kratak rok, pa je ovo glavna
+  // zaštita od pogađanja. NE dizati na produkciji.
+  //
+  // Podesivo iz istog razloga kao limit registracije: svaki e2e test koji
+  // treba hub ga i upari (registerHub u tests/fornect.spec.ts). Dok je
+  // ovo bilo upisano u kod kao 10, suite je prolazio jednom na sat — a
+  // 429 sa ove rute se lako zamijeni za 429 sa registracije, jer ih
+  // testovi zovu jednu za drugom.
+  hubClaimMaxPerHour: Number(process.env['HUB_CLAIM_MAX_PER_HOUR'] ?? 10),
+
   // Nakon koliko sati se neklasifikovan uređaj sam svrstava među
   // goste (Zadatak 1, Tačka 5). Nula isključuje politiku.
   autoGuestAfterHours: Number(process.env['AUTO_GUEST_AFTER_HOURS'] ?? 24),

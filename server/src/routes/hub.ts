@@ -52,11 +52,16 @@ export async function hubRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{ Body: ClaimBody }>(
     '/hub/claim',
     {
-      // Kod je samo 6 cifara — rate limit po nalogu je ključna zaštita
-      // od brute-force pogađanja (dodatno uz kratak TTL koda).
+      // Kod je samo 6 cifara — rate limit je ključna zaštita od
+      // brute-force pogađanja (dodatno uz kratak TTL koda).
+      //
+      // Ključ je IP adresa, ne nalog. Ranije je ovdje pisalo „po
+      // nalogu", što nije bilo tačno — a IP je i bolji izbor: napadač
+      // može otvoriti više naloga i tako umnožiti pokušaje, dok mu je
+      // IP adresa teže mijenjati.
       config: {
         rateLimit: {
-          max: 10,
+          max: env.hubClaimMaxPerHour,
           timeWindow: '1 hour',
         },
       },

@@ -100,36 +100,53 @@ interface RegisteredHub {
   pairing_code: string;
 }
 
-// Registracija huba za test.
+// Registracija i uparivanje huba za test.
 //
-// /devices/register je ogranicen po IP-u (DEVICE_REGISTER_MAX_PER_HOUR,
-// podrazumijevano 10) — to je zastita od neovlastenog registrovanja
-// uredjaja i ostaje takva. Testovi idu sa iste adrese, a hub registruje
-// njih osam, pa sa podrazumijevanom granicom suite prodje jednom na
-// sat.
+// Obje rute su ogranicene po IP-u: /devices/register
+// (DEVICE_REGISTER_MAX_PER_HOUR) i /hub/claim (HUB_CLAIM_MAX_PER_HOUR),
+// obje podrazumijevano 10 na sat. To je zastita i ostaje takva. Testovi
+// idu sa iste adrese, a hub registruje i upari njih osam, pa za lokalni
+// rad obje vrijednosti treba podici u server/.env.
 //
-// Zato ova funkcija provjerava odgovor ODMAH. Bez toga 429 izgleda kao
-// "Cannot read properties of undefined" pet redova kasnije, u sedam
-// testova odjednom, i trazi se greska u kodu koje nema.
+// Zato se provjeravaju OBA odgovora, odmah i odvojeno. Bez toga 429
+// izgleda kao "undefined" pet redova kasnije. I desilo se tacno to:
+// prvo sam 429 sa uparivanja pripisao registraciji, jer se test nije
+// zaustavio tamo gdje je stvarno pukao.
 async function registerHub(
   page: Page,
+  headers: Record<string, string>,
   data: { name: string; kind?: string; mode?: string; capacity?: number },
 ): Promise<RegisteredHub> {
-  const response = await page.request.post('/api/v1/devices/register', {
+  const registered = await page.request.post('/api/v1/devices/register', {
     data: { kind: 'home', mode: 'home', ...data },
   });
 
-  if (response.status() === 429) {
+  if (registered.status() === 429) {
     throw new Error(
-      'Registracija huba je odbijena (429): dostignut je DEVICE_REGISTER_MAX_PER_HOUR. ' +
-        'Za razvoj povecajte vrijednost u server/.env (npr. 1000) i restartujte backend — ' +
-        'restart i sam isprazni brojac.',
+      'Registracija huba odbijena (429): dostignut DEVICE_REGISTER_MAX_PER_HOUR. ' +
+        'Za razvoj ga povecajte u server/.env i restartujte backend.',
     );
   }
 
-  expect(response.status(), 'registracija huba').toBe(201);
+  expect(registered.status(), 'registracija huba').toBe(201);
 
-  return response.json();
+  const hub: RegisteredHub = await registered.json();
+
+  const claimed = await page.request.post('/api/v1/app/hub/claim', {
+    headers,
+    data: { pairing_code: hub.pairing_code },
+  });
+
+  if (claimed.status() === 429) {
+    throw new Error(
+      'Uparivanje huba odbijeno (429): dostignut HUB_CLAIM_MAX_PER_HOUR. ' +
+        'Za razvoj ga povecajte u server/.env i restartujte backend.',
+    );
+  }
+
+  expect(claimed.status(), 'uparivanje huba').toBe(200);
+
+  return hub;
 }
 
 const WEEK_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -1133,14 +1150,7 @@ test('27 - devices beyond the licence are named, and a freed slot is noticed', a
 
   // Hub sa kapacitetom 2, uparen sa ovim nalogom. Nalog vec ima 4
   // uredjaja, dakle dva su preko licence.
-  const hub = await registerHub(page, { name: 'Test hub', capacity: 2 });
-
-  const claimResponse = await page.request.post('/api/v1/app/hub/claim', {
-    headers,
-    data: { pairing_code: hub.pairing_code },
-  });
-
-  expect(claimResponse.ok()).toBeTruthy();
+  await registerHub(page, headers, { name: 'Test hub', capacity: 2 });
 
   await page.goto('/devices');
 
@@ -1198,12 +1208,7 @@ test('28 - the hub can report a new device, and a repeat does not duplicate it',
 
   const headers = { Authorization: `Bearer ${token}` };
 
-  const hub = await registerHub(page, { name: 'Event hub' });
-
-  await page.request.post('/api/v1/app/hub/claim', {
-    headers,
-    data: { pairing_code: hub.pairing_code },
-  });
+  const hub = await registerHub(page, headers, { name: 'Event hub' });
 
   const hubHeaders = { Authorization: `Bearer ${hub.token}` };
   const mac = '02:00:00:00:09:01';
@@ -1289,12 +1294,7 @@ test('29 - portal text is edited in the panel and the hub pulls exactly that', a
 
   const headers = { Authorization: `Bearer ${token}` };
 
-  const hub = await registerHub(page, { name: 'Portal hub' });
-
-  await page.request.post('/api/v1/app/hub/claim', {
-    headers,
-    data: { pairing_code: hub.pairing_code },
-  });
+  const hub = await registerHub(page, headers, { name: 'Portal hub' });
 
   const hubHeaders = { Authorization: `Bearer ${hub.token}` };
 
@@ -1358,12 +1358,7 @@ test('29 - portal text is edited in the panel and the hub pulls exactly that', a
 async function seedHub(page: Page, email: string, token: string) {
   const headers = { Authorization: `Bearer ${token}` };
 
-  const hub = await registerHub(page, { name: 'Fleet hub', capacity: 10 });
-
-  await page.request.post('/api/v1/app/hub/claim', {
-    headers,
-    data: { pairing_code: hub.pairing_code },
-  });
+  const hub = await registerHub(page, headers, { name: 'Fleet hub', capacity: 10 });
 
   // Jedan uparen uredjaj, da se vidi da OTA izmjena ne obrise MAC-ove.
   await page.request.post('/api/v1/app/network-devices', {
@@ -1880,4 +1875,99 @@ test('35 - devices whose consent predates the current policy are listed together
   expect(history.rows.every((row) => row.policy_version !== '0.9' || row.revoked_reason)).toBe(
     true,
   );
+});
+
+test('36 - group commands pause a ring and undo a list set only where it is active', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // Dva huba na istom nalogu — grupne komande se sa jednim ni ne prikazuju.
+  const sarajevo = await registerHub(page, headers, { name: 'Hub Sarajevo' });
+  const mostar = await registerHub(page, headers, { name: 'Hub Mostar' });
+
+  const setLists = (id: string, urls: string[], label: string) =>
+    page.request.put(`/api/v1/app/fleet/${id}/lists`, { headers, data: { urls, label } });
+
+  const configOf = async (hub: RegisteredHub) =>
+    (
+      await (
+        await page.request.get(`/api/v1/devices/${hub.id}/config`, {
+          headers: { Authorization: `Bearer ${hub.token}` },
+        })
+      ).json()
+    ).config_json;
+
+  // Sarajevo: dobra lista, pa losa. Mostar: svoja, losa do njega nije
+  // ni stigla. To je upravo slucaj u kojem bi "vrati prethodni svima"
+  // na Mostaru ponistio dobru izmjenu.
+  await setLists(sarajevo.id, ['https://lists.example.com/dobra.txt'], 'Dobra lista');
+  await setLists(sarajevo.id, ['https://lists.example.com/losa.txt'], 'Losa lista');
+  await setLists(mostar.id, ['https://lists.example.com/mostar.txt'], 'Mostarska lista');
+
+  await page.request.put(`/api/v1/app/fleet/${sarajevo.id}/ota`, {
+    headers,
+    data: { ota_ring: 'bench' },
+  });
+
+  await page.goto('/fleet');
+
+  const results = page.locator('#group-results');
+
+  // --- Kill-switch za cijeli nalog.
+  await page.getByRole('button', { name: 'Pause group' }).click();
+
+  await expect(results).toContainText('Hub Sarajevo: done');
+  await expect(results).toContainText('Hub Mostar: done');
+  await expect(page.getByText('Updates paused', { exact: true })).toHaveCount(2);
+
+  // I to je stiglo do uredjaja, ne samo na ekran.
+  expect((await configOf(sarajevo)).ota.paused).toBe(true);
+  expect((await configOf(mostar)).ota.paused).toBe(true);
+
+  // --- Nastavak samo za klupu.
+  await page.locator('#group-ring').selectOption('bench');
+  await page.getByRole('button', { name: 'Resume group' }).click();
+
+  await expect(results).toContainText('Hub Sarajevo: done');
+  await expect(results).not.toContainText('Hub Mostar');
+  await expect(page.getByText('Updates paused', { exact: true })).toHaveCount(1);
+
+  expect((await configOf(sarajevo)).ota.paused).toBe(false);
+  expect((await configOf(mostar)).ota.paused).toBe(true);
+
+  // --- Ponistavanje seta na cijelom nalogu.
+  await page.locator('#group-ring').selectOption('');
+  await page
+    .locator('#group-set')
+    .selectOption(JSON.stringify(['https://lists.example.com/losa.txt']));
+
+  await page.getByRole('button', { name: 'Undo set on group' }).click();
+
+  await expect(results).toContainText('Hub Sarajevo: done');
+
+  // OVO je poenta. Mostar nije imao losu listu, pa se ne dira — i to se
+  // kaze, ne precutkuje.
+  await expect(results).toContainText(
+    'Hub Mostar: skipped — another set is active on the device',
+  );
+
+  expect((await configOf(sarajevo)).filter_lists.urls).toEqual([
+    'https://lists.example.com/dobra.txt',
+  ]);
+
+  expect((await configOf(mostar)).filter_lists.urls).toEqual([
+    'https://lists.example.com/mostar.txt',
+  ]);
+
+  // Grupni rollback bez navedenog seta server odbija: to bi bilo upravo
+  // "vrati prethodni svima".
+  const blind = await page.request.post('/api/v1/app/fleet/bulk', {
+    headers,
+    data: { action: 'rollback-lists', ring: null },
+  });
+
+  expect(blind.status()).toBe(400);
 });

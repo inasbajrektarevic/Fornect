@@ -1,8 +1,13 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
-import { FleetService, type FleetDevice, type OtaRing } from '../../core/services/fleet';
+import {
+  FleetService,
+  type BulkResult,
+  type FleetDevice,
+  type OtaRing,
+} from '../../core/services/fleet';
 import { TranslatePipe } from '../../shared/pipes/translate';
 
 /**
@@ -52,6 +57,52 @@ export class Fleet {
 
   readonly draftUrls = signal('');
   readonly draftLabel = signal('');
+
+  // --- Grupne komande (Tačka 6: „po uređaju / grupi") ---
+
+  /** Grupa: prazno = cijeli nalog, inače jedan prsten. */
+  readonly groupRing = signal<OtaRing | ''>('');
+
+  /** Ključ seta koji se grupno poništava. */
+  readonly groupSetKey = signal('');
+
+  /** Ishod posljednje grupne komande, uređaj po uređaj. */
+  readonly groupResults = signal<BulkResult[] | null>(null);
+
+  /**
+   * Grupne komande imaju smisla tek sa više uređaja. Home nalog sa
+   * jednim hub-om ih ne vidi — isto bi radile kao dugmad na kartici,
+   * samo bi ekran bio duži.
+   */
+  readonly showGroup = computed(() => (this.devices()?.length ?? 0) > 1);
+
+  /**
+   * Različiti setovi lista koji su TRENUTNO aktivni na nekom uređaju.
+   *
+   * Grupni rollback poništava jedan od njih. Nudi se samo ono što je
+   * negdje aktivno: set koji nije nigdje aktivan nema šta poništiti, a
+   * lista svih setova iz historije bi natjerala čovjeka da u incidentu
+   * pogađa koji je loš.
+   */
+  readonly activeSets = computed(() => {
+    const sets = new Map<string, { key: string; label: string | null; urls: string[]; hubs: number }>();
+
+    for (const device of this.devices() ?? []) {
+      const list = device.activeList;
+
+      if (!list || list.urls.length === 0) {
+        continue;
+      }
+
+      const key = setKey(list.urls);
+      const entry = sets.get(key) ?? { key, label: list.label, urls: list.urls, hubs: 0 };
+
+      entry.hubs += 1;
+      sets.set(key, entry);
+    }
+
+    return [...sets.values()];
+  });
 
   constructor() {
     void this.load();
@@ -150,6 +201,32 @@ export class Fleet {
     await this.run(() => this.fleetService.rollbackLists(device.id));
   }
 
+  async groupPause(paused: boolean): Promise<void> {
+    await this.run(async () => {
+      this.groupResults.set(
+        await this.fleetService.bulk(paused ? 'pause' : 'resume', this.groupRing() || null),
+      );
+    });
+  }
+
+  async groupRollback(): Promise<void> {
+    const target = this.activeSets().find((set) => set.key === this.groupSetKey());
+
+    if (!target) {
+      return;
+    }
+
+    await this.run(async () => {
+      this.groupResults.set(
+        await this.fleetService.bulk('rollback-lists', this.groupRing() || null, target.urls),
+      );
+    });
+  }
+
+  setLabel(set: { label: string | null; urls: string[] }): string {
+    return set.label || set.urls[0] || '';
+  }
+
   private async run(action: () => Promise<void>): Promise<void> {
     this.busy.set(true);
     this.errorKey.set('');
@@ -172,4 +249,12 @@ export class Fleet {
       this.busy.set(false);
     }
   }
+}
+
+/**
+ * Isti ključ kao na serveru (routes/fleet.ts): isti URL-ovi, bilo kojim
+ * redom. Ovdje služi samo za izbor u listi — server provjeru radi sam.
+ */
+function setKey(urls: string[]): string {
+  return JSON.stringify(urls.map((url) => url.trim()).sort());
 }

@@ -6,6 +6,17 @@ import { API_BASE_URL } from '../config/api.config';
 
 export type OtaRing = 'bench' | 'early' | 'half' | 'all';
 
+export type BulkAction = 'pause' | 'resume' | 'rollback-lists';
+
+/** Ishod grupne komande za jedan uređaj. */
+export interface BulkResult {
+  device_id: string;
+  name: string;
+  status: 'applied' | 'unchanged' | 'skipped';
+  reason_code?: 'other-set-active' | 'no-previous-set';
+  reason?: string;
+}
+
 export interface FilterListSet {
   id: string;
   label: string | null;
@@ -114,6 +125,32 @@ export class FleetService {
     this.replace(deviceId, row);
 
     return row.direct_source_warnings ?? [];
+  }
+
+  /**
+   * Grupna komanda. `ring` null znači cijeli nalog.
+   *
+   * Poslije komande se cijela lista ponovo učitava umjesto da se
+   * odgovor spaja sa postojećim: grupna komanda dira više kartica
+   * odjednom, a ekran koji bi pokazao pola novog i pola starog stanja
+   * bio bi gori od sekunde čekanja.
+   */
+  async bulk(
+    action: BulkAction,
+    ring: OtaRing | null,
+    expectedUrls?: string[],
+  ): Promise<BulkResult[]> {
+    const response = await firstValueFrom(
+      this.http.post<{ results: BulkResult[] }>(`${API_BASE_URL}/app/fleet/bulk`, {
+        action,
+        ring,
+        expected_urls: expectedUrls,
+      }),
+    );
+
+    await this.reload();
+
+    return response.results;
   }
 
   async rollbackLists(deviceId: string): Promise<void> {

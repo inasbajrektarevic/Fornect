@@ -32,6 +32,118 @@
         </section>
       }
 
+      <!-- GRUPNE KOMANDE — Tačka 6: „po uređaju / grupi" -->
+      @if (showGroup()) {
+        <section class="card group" id="group-card">
+          <h2>{{ 'fleet.group.title' | translate }}</h2>
+          <p class="hint">{{ 'fleet.group.hint' | translate }}</p>
+
+          <label class="field">
+            <span>{{ 'fleet.group.target' | translate }}</span>
+
+            <select
+              id="group-ring"
+              name="groupRing"
+              [ngModel]="groupRing()"
+              (ngModelChange)="groupRing.set($event)">
+              <option value="">{{ 'fleet.group.wholeAccount' | translate }}</option>
+
+              @for (ring of rings; track ring) {
+                <option [value]="ring">{{ 'fleet.ring.' + ring | translate }}</option>
+              }
+            </select>
+          </label>
+
+          <div class="actions">
+            <button
+              type="button"
+              class="danger-button"
+              [disabled]="busy()"
+              (click)="groupPause(true)">
+              {{ 'fleet.group.pause' | translate }}
+            </button>
+
+            <button
+              type="button"
+              class="back-button"
+              [disabled]="busy()"
+              (click)="groupPause(false)">
+              {{ 'fleet.group.resume' | translate }}
+            </button>
+          </div>
+
+          <div class="block">
+            <h3>{{ 'fleet.group.rollbackTitle' | translate }}</h3>
+            <p class="hint">{{ 'fleet.group.rollbackHint' | translate }}</p>
+
+            @if (activeSets().length > 0) {
+              <label class="field">
+                <span>{{ 'fleet.group.setToUndo' | translate }}</span>
+
+                <select
+                  id="group-set"
+                  name="groupSet"
+                  [ngModel]="groupSetKey()"
+                  (ngModelChange)="groupSetKey.set($event)">
+                  <option value="">{{ 'fleet.group.chooseSet' | translate }}</option>
+
+                  @for (set of activeSets(); track set.key) {
+                    <option [value]="set.key">
+                      {{ setLabel(set) }} —
+                      {{ 'fleet.group.onHubs' | translate: { count: set.hubs } }}
+                    </option>
+                  }
+                </select>
+              </label>
+
+              <div class="actions">
+                <!-- Bez izabranog seta dugme ne smije biti aktivno: grupni
+                     rollback bez cilja je upravo „vrati prethodni svima". -->
+                <button
+                  type="button"
+                  class="danger-button"
+                  [disabled]="busy() || !groupSetKey()"
+                  (click)="groupRollback()">
+                  {{ 'fleet.group.rollback' | translate }}
+                </button>
+              </div>
+            } @else {
+              <p class="pending">{{ 'fleet.group.noSets' | translate }}</p>
+            }
+          </div>
+
+          <!-- Ishod uređaj po uređaj. „Urađeno" bez spiska bi sakrilo
+               baš one koji su preskočeni. -->
+          @if (groupResults(); as results) {
+            <ul class="group-results" id="group-results">
+              @if (results.length === 0) {
+                <li>{{ 'fleet.group.noneInGroup' | translate }}</li>
+              }
+
+              @for (result of results; track result.device_id) {
+                <li [class.skipped]="result.status === 'skipped'">
+                  <strong>{{ result.name }}</strong>:
+
+                  @switch (result.status) {
+                    @case ('applied') {
+                      {{ 'fleet.group.applied' | translate }}
+                    }
+
+                    @case ('unchanged') {
+                      {{ 'fleet.group.unchanged' | translate }}
+                    }
+
+                    @case ('skipped') {
+                      {{ 'fleet.group.skip.' + result.reason_code | translate }}
+                    }
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      }
+
       @for (device of hubs; track device.id) {
         <section class="card hub">
           <div class="hub-head">

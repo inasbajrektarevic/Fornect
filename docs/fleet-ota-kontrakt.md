@@ -17,7 +17,7 @@ novi kanal ka uređaju.
 
 ```json
 {
-  "consented_macs": ["AA:BB:CC:00:11:22"],
+  "consented_macs": ["aa:bb:cc:00:11:22"],
   "ota": {
     "ring": "bench | early | half | all",
     "paused": false,
@@ -47,11 +47,29 @@ Napomene koje nisu kozmetičke:
   gasi praznim poljem.
 - Prozor **smije prelaziti ponoć** (23:00–03:00). Ne pretpostavljajte
   `start < end`.
+- **MAC adrese su uvijek u obliku `aa:bb:cc:dd:ee:ff`** — mala slova,
+  dvotačke. Cloud ih tako normalizuje na svakom ulazu i baza drugi oblik ne
+  prima (migracija 019). Isti oblik očekujemo i u eventima i u prijavi
+  prisutnosti; poređenje osjetljivo na velika slova bi uređaj učinilo
+  nevidljivim.
 - `ring` je oznaka prstena, ne procenat. Koliko je „early" procenata flote je
   odluka rolloutu i živi u cloudu, ne u uređaju.
 
 Panel ekran: `/fleet` (iz Postavki). Po hub-u: inventar verzija, prsten,
 prozor održavanja, kill-switch, set lista i vraćanje prethodnog seta.
+
+Grupne komande (`POST /api/v1/app/fleet/bulk`), kad nalog ima više hub-ova.
+Grupa je jedan prsten ili cijeli nalog:
+
+- **pauza / nastavak** — isto `ota.paused` za svaki uređaj u grupi
+- **poništavanje seta lista** — NIJE „vrati prethodni svima". Poništava se
+  izabrani set, i to samo na uređajima na kojima je trenutno aktivan.
+  Uređaj sa drugim setom se preskače: loša lista ne stigne uvijek do cijele
+  grupe, a „prethodni" na uređaju koji je nije dobio poništio bi dobru
+  izmjenu.
+
+Za uređaj se ništa ne mijenja — grupna komanda završi kao isti `ota` i
+`filter_lists` blok u configu svakog pogođenog uređaja.
 
 ---
 

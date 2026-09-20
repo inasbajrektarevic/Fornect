@@ -709,6 +709,26 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Postavke su snimljene (verzija {version}), ali ih uređaj još nije potvrdio.',
     'fleet.configNone':
       'Za ovaj uređaj još nije upisana nijedna konfiguracija, pa nema ni čega da stigne.',
+    'fleet.group.title': 'Grupne komande',
+    'fleet.group.hint':
+      'Za više uređaja odjednom — prsten ili cijeli nalog. Ishod se prikazuje za svaki uređaj posebno.',
+    'fleet.group.target': 'Grupa',
+    'fleet.group.wholeAccount': 'Cijeli nalog',
+    'fleet.group.pause': 'Pauziraj grupu',
+    'fleet.group.resume': 'Nastavi grupu',
+    'fleet.group.rollbackTitle': 'Poništavanje seta lista',
+    'fleet.group.rollbackHint':
+      'Izabrani set se poništava samo na uređajima na kojima je trenutno aktivan. Uređaji sa nekim drugim setom se preskaču — vraćanje „prethodnog" na njima bi poništilo izmjenu koja nije problem.',
+    'fleet.group.setToUndo': 'Set koji se poništava',
+    'fleet.group.chooseSet': 'Izaberite set',
+    'fleet.group.onHubs': 'aktivan na {count}',
+    'fleet.group.rollback': 'Poništi set na grupi',
+    'fleet.group.noSets': 'Nijedan uređaj trenutno nema set lista iz panela, pa nema šta poništiti.',
+    'fleet.group.noneInGroup': 'U ovoj grupi nema nijednog uređaja.',
+    'fleet.group.applied': 'urađeno',
+    'fleet.group.unchanged': 'već je bilo tako',
+    'fleet.group.skip.other-set-active': 'preskočeno — na uređaju je aktivan drugi set',
+    'fleet.group.skip.no-previous-set': 'preskočeno — nema ranijeg seta na koji bi se vratio',
     'fleet.missingTitle': 'Šta ovdje namjerno ne stoji',
     'fleet.missingBody':
       'Zdravstveni pregled flote — stopa blokiranja, greške na proxyju i broj pokušaja pokretanja — nije ovdje jer uređaj te podatke još ne šalje. Ekran koji ih crta prikazivao bi nule koje se ne razlikuju od stvarnih nula, a na osnovu takvog broja neko donese odluku.',
@@ -1845,6 +1865,26 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Settings are saved (version {version}), but the device has not confirmed them yet.',
     'fleet.configNone':
       'No configuration has been written for this device yet, so there is nothing to arrive.',
+    'fleet.group.title': 'Group commands',
+    'fleet.group.hint':
+      'For several devices at once — a ring or the whole account. The outcome is shown for each device separately.',
+    'fleet.group.target': 'Group',
+    'fleet.group.wholeAccount': 'Whole account',
+    'fleet.group.pause': 'Pause group',
+    'fleet.group.resume': 'Resume group',
+    'fleet.group.rollbackTitle': 'Undoing a list set',
+    'fleet.group.rollbackHint':
+      'The chosen set is undone only on devices where it is currently active. Devices with another set are skipped — restoring the “previous” one there would undo a change that is not the problem.',
+    'fleet.group.setToUndo': 'Set to undo',
+    'fleet.group.chooseSet': 'Choose a set',
+    'fleet.group.onHubs': 'active on {count}',
+    'fleet.group.rollback': 'Undo set on group',
+    'fleet.group.noSets': 'No device currently has a list set from the panel, so there is nothing to undo.',
+    'fleet.group.noneInGroup': 'There are no devices in this group.',
+    'fleet.group.applied': 'done',
+    'fleet.group.unchanged': 'already that way',
+    'fleet.group.skip.other-set-active': 'skipped — another set is active on the device',
+    'fleet.group.skip.no-previous-set': 'skipped — there is no earlier set to restore',
     'fleet.missingTitle': 'What is deliberately not here',
     'fleet.missingBody':
       'A fleet health view — block rate, proxy errors and boot attempts — is not here because the device does not send that data yet. A screen drawing it would show zeros indistinguishable from real zeros, and someone would make a decision on that number.',

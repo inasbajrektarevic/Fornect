@@ -26,6 +26,7 @@
 //   pošalje u heartbeat-u, panel piše da ih uređaj ne prijavljuje.
 
 import type { FastifyInstance } from 'fastify';
+import type { PoolClient } from 'pg';
 
 import { pool } from '../db';
 import { env } from '../env';
@@ -41,6 +42,12 @@ interface OtaBody {
 interface ListsBody {
   urls?: unknown;
   label?: string;
+}
+
+interface BulkBody {
+  action?: string;
+  ring?: string | null;
+  expected_urls?: unknown[];
 }
 
 const RINGS = ['bench', 'early', 'half', 'all'];
@@ -283,37 +290,13 @@ export async function fleetRoutes(fastify: FastifyInstance): Promise<void> {
       try {
         await client.query('BEGIN');
 
-        const { rows } = await client.query<{
-          id: string;
-          urls: string[];
-          label: string | null;
-        }>(
-          `SELECT fls.id, fls.urls, fls.label
-           FROM filter_list_sets fls
-           JOIN devices d ON d.id = fls.device_id
-           WHERE fls.device_id = $1 AND d.claimed_by_account_id = $2
-           ORDER BY fls.created_at DESC, fls.id DESC
-           LIMIT 2`,
-          [request.params.id, request.accountId],
-        );
+        const outcome = await rollbackHubLists(client, request.accountId!, request.params.id);
 
-        const previous = rows[1];
-
-        if (!previous) {
+        if (outcome.status !== 'applied') {
           await client.query('ROLLBACK');
 
-          return reply
-            .code(409)
-            .send({ error: 'Nema ranijeg seta lista na koji bi se moglo vratiti.' });
+          return reply.code(409).send({ error: outcome.reason });
         }
-
-        await client.query(
-          `INSERT INTO filter_list_sets (device_id, urls, label, source, restored_from)
-           VALUES ($1, $2::jsonb, $3, 'rollback', $4)`,
-          [request.params.id, JSON.stringify(previous.urls), previous.label, previous.id],
-        );
-
-        await syncDeviceConfig(client, request.accountId!, request.params.id);
 
         await client.query('COMMIT');
       } catch (error) {
@@ -326,6 +309,200 @@ export async function fleetRoutes(fastify: FastifyInstance): Promise<void> {
 
       return reply.send(await loadOne(request.accountId!, request.params.id));
     },
+  );
+
+  // Grupne komande — Tačka 6: „kill-switch za pauziranje rolloutu, i
+  // rollback komande po uređaju/grupi".
+  //
+  // Grupa je prsten (bench / early / half / all) ili cijeli nalog.
+  //
+  // Pauza i nastavak su jednostavni: isto stanje za svaki uređaj u grupi.
+  //
+  // Rollback NIJE „vrati prethodni svima". To bi bilo opasno: loša lista
+  // ne stigne uvijek do cijele grupe, a „prethodni" na uređaju koji je
+  // nikad nije dobio poništio bi neku DOBRU izmjenu — tiho, u sred
+  // incidenta, kad niko ne gleda pojedinačne uređaje. Zato grupni
+  // rollback znači „poništi OVAJ set gdje god je aktivan": pozivalac šalje
+  // URL-ove seta koji poništava, a uređaji na kojima je aktivan neki drugi
+  // set se preskaču i to se kaže.
+  //
+  // Odgovor nosi ishod za SVAKI uređaj. „Urađeno" bez spiska bi sakrilo
+  // upravo one uređaje koji su preskočeni — a o njima se najviše pita.
+  fastify.post<{ Body: BulkBody }>('/fleet/bulk', async (request, reply) => {
+    const body = request.body ?? {};
+    const action = body.action;
+
+    if (action !== 'pause' && action !== 'resume' && action !== 'rollback-lists') {
+      return reply.code(400).send({ error: 'action mora biti pause, resume ili rollback-lists.' });
+    }
+
+    const ring = body.ring ?? null;
+
+    if (ring !== null && !RINGS.includes(ring)) {
+      return reply.code(400).send({ error: `ring mora biti jedno od: ${RINGS.join(', ')}.` });
+    }
+
+    let expected: string | null = null;
+
+    if (action === 'rollback-lists') {
+      if (!Array.isArray(body.expected_urls) || body.expected_urls.length === 0) {
+        return reply.code(400).send({
+          error: 'Za grupni rollback treba navesti koji se set poništava (expected_urls).',
+        });
+      }
+
+      expected = setKey(body.expected_urls);
+    }
+
+    const client = await pool.connect();
+    const results: BulkOutcome[] = [];
+
+    try {
+      await client.query('BEGIN');
+
+      // FOR UPDATE: dvije grupne komande koje stignu jedna preko druge
+      // (npr. dva prozora panela) ne smiju obje vidjeti isto početno
+      // stanje i obje ga „promijeniti".
+      const { rows: hubs } = await client.query<{
+        id: string;
+        name: string;
+        ota_paused: boolean;
+      }>(
+        `SELECT id, name, ota_paused
+         FROM devices
+         WHERE claimed_by_account_id = $1
+           AND ($2::text IS NULL OR ota_ring = $2)
+         ORDER BY created_at ASC
+         FOR UPDATE`,
+        [request.accountId, ring],
+      );
+
+      for (const hub of hubs) {
+        if (action === 'rollback-lists') {
+          const outcome = await rollbackHubLists(client, request.accountId!, hub.id, expected);
+
+          results.push({ device_id: hub.id, name: hub.name, ...outcome });
+
+          continue;
+        }
+
+        const paused = action === 'pause';
+
+        if (hub.ota_paused === paused) {
+          results.push({ device_id: hub.id, name: hub.name, status: 'unchanged' });
+
+          continue;
+        }
+
+        await client.query('UPDATE devices SET ota_paused = $2, updated_at = now() WHERE id = $1', [
+          hub.id,
+          paused,
+        ]);
+
+        await syncDeviceConfig(client, request.accountId!, hub.id);
+
+        results.push({ device_id: hub.id, name: hub.name, status: 'applied' });
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    return reply.send({ action, ring, results });
+  });
+}
+
+type SkipCode = 'other-set-active' | 'no-previous-set';
+
+type BulkOutcome = {
+  device_id: string;
+  name: string;
+  status: 'applied' | 'unchanged' | 'skipped';
+  // Kod je za panel, koji ga prevodi; tekst je za svakog drugog ko
+  // čita odgovor (log, curl). Samo tekst bi panel na engleskom
+  // natjerao da prikazuje bosanski.
+  reason_code?: SkipCode;
+  reason?: string;
+};
+
+type RollbackOutcome =
+  | { status: 'applied' }
+  | { status: 'skipped'; reason_code: SkipCode; reason: string };
+
+/**
+ * Vraća prethodni set filter lista na jednom hub-u.
+ *
+ * Jedino mjesto sa ovim pravilom — zovu ga i pojedinačna i grupna ruta.
+ *
+ * `expectedKey` postoji samo kod grupnog rollbacka: vraća se SAMO ako je
+ * na hub-u trenutno aktivan baš set koji se poništava. Kod pojedinačnog
+ * je čovjek pogledao taj uređaj i odlučio, pa provjera ne treba.
+ */
+async function rollbackHubLists(
+  client: PoolClient,
+  accountId: string,
+  deviceId: string,
+  expectedKey: string | null = null,
+): Promise<RollbackOutcome> {
+  const { rows } = await client.query<{
+    id: string;
+    urls: string[];
+    label: string | null;
+  }>(
+    `SELECT fls.id, fls.urls, fls.label
+     FROM filter_list_sets fls
+     JOIN devices d ON d.id = fls.device_id
+     WHERE fls.device_id = $1 AND d.claimed_by_account_id = $2
+     ORDER BY fls.created_at DESC, fls.id DESC
+     LIMIT 2`,
+    [deviceId, accountId],
+  );
+
+  const [active, previous] = rows;
+
+  if (expectedKey !== null && (!active || setKey(active.urls) !== expectedKey)) {
+    return {
+      status: 'skipped',
+      reason_code: 'other-set-active',
+      reason: 'Na uređaju je aktivan drugi set lista.',
+    };
+  }
+
+  if (!previous) {
+    return {
+      status: 'skipped',
+      reason_code: 'no-previous-set',
+      reason: 'Nema ranijeg seta lista na koji bi se moglo vratiti.',
+    };
+  }
+
+  await client.query(
+    `INSERT INTO filter_list_sets (device_id, urls, label, source, restored_from)
+     VALUES ($1, $2::jsonb, $3, 'rollback', $4)`,
+    [deviceId, JSON.stringify(previous.urls), previous.label, previous.id],
+  );
+
+  await syncDeviceConfig(client, accountId, deviceId);
+
+  return { status: 'applied' };
+}
+
+/**
+ * Ključ po kojem se prepoznaje „isti set": isti URL-ovi, bez obzira na
+ * redoslijed. Oznaka se ne računa — dva seta sa istim listama a drugačijim
+ * imenom jesu isti set sa stanovišta uređaja.
+ */
+function setKey(urls: unknown[]): string {
+  return JSON.stringify(
+    urls
+      .filter((url): url is string => typeof url === 'string')
+      .map((url) => url.trim())
+      .sort(),
   );
 }
 
@@ -356,7 +533,12 @@ async function loadOne(
        (SELECT count(*)::int > 1 FROM filter_list_sets fls
         WHERE fls.device_id = d.id) AS can_rollback,
        (SELECT max(version) FROM device_configs dc WHERE dc.device_id = d.id)
-         AS config_version
+         AS config_version,
+       -- Mora biti i ovdje, ne samo u listi. Panel odgovor spaja sa
+       -- postojećom karticom, a polje koje nedostaje pretvori u null:
+       -- uređaj koji JESTE potvrdio postavke ispao bi kao da nije.
+       (SELECT max(version) FROM device_configs dc
+        WHERE dc.device_id = d.id AND dc.acked_at IS NOT NULL) AS acked_version
      FROM devices d
      WHERE d.id = $1 AND d.claimed_by_account_id = $2`,
     [deviceId, accountId],
