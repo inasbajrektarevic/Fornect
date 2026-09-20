@@ -729,6 +729,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'fleet.group.unchanged': 'već je bilo tako',
     'fleet.group.skip.other-set-active': 'preskočeno — na uređaju je aktivan drugi set',
     'fleet.group.skip.no-previous-set': 'preskočeno — nema ranijeg seta na koji bi se vratio',
+    'fleet.error.list-too-large-for-home':
+      'HaGeZi Ultimate i TIF liste nisu dozvoljene na Home uređaju: prevelike su za njegovu memoriju, a Pi-hole koji ostane bez memorije obori internet cijeloj mreži. Odbijeno: {urls}',
     'fleet.missingTitle': 'Šta ovdje namjerno ne stoji',
     'fleet.missingBody':
       'Zdravstveni pregled flote — stopa blokiranja, greške na proxyju i broj pokušaja pokretanja — nije ovdje jer uređaj te podatke još ne šalje. Ekran koji ih crta prikazivao bi nule koje se ne razlikuju od stvarnih nula, a na osnovu takvog broja neko donese odluku.',
@@ -1885,6 +1887,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'fleet.group.unchanged': 'already that way',
     'fleet.group.skip.other-set-active': 'skipped — another set is active on the device',
     'fleet.group.skip.no-previous-set': 'skipped — there is no earlier set to restore',
+    'fleet.error.list-too-large-for-home':
+      'HaGeZi Ultimate and TIF lists are not allowed on a Home device: they are too large for its memory, and a Pi-hole that runs out of memory takes the internet down for the whole network. Refused: {urls}',
     'fleet.missingTitle': 'What is deliberately not here',
     'fleet.missingBody':
       'A fleet health view — block rate, proxy errors and boot attempts — is not here because the device does not send that data yet. A screen drawing it would show zeros indistinguishable from real zeros, and someone would make a decision on that number.',

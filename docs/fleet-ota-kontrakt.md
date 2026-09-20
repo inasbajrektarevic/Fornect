@@ -120,6 +120,18 @@ iz samog broja blokiranih.
 - Rezultat pokušaja prijaviti kao event (postoji `POST /devices/:id/events`,
   idempotentan po `event_id`) — tip za OTA ishod još nije dogovoren.
 
+### 2.4 Veličina lista prije učitavanja
+
+Cloud na Home uređaju odbija HaGeZi Ultimate i TIF (Zadatak 1, Oblast C i
+Tačka 1: ~1,8–2 GB samo za liste, a uređaj ima 2 GB). Ali cloud listu
+prepoznaje **po imenu u adresi** — ista lista pod drugim imenom bi prošla.
+
+Zato uređaj prije `updateGravity` treba sam provjeriti broj domena, i ako
+prelazi granicu za svoju memoriju (orijentaciono ~300k na 2 GB, po Tački 1),
+**zadržati staru listu** i javiti to kao event. Gravity swap ionako čuva staru
+bazu dok nova nije gotova, pa je ovo isti dobar ishod kao kod prekinutog
+downloada: nikad prazna zaštita, i nikad oboren Pi-hole.
+
 ---
 
 ## 3. Šta ostaje van dometa Zadatka 3

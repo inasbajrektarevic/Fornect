@@ -1,78 +1,150 @@
-# Fornect Admin Panel — web i mobilna aplikacija
+# Fornect Admin Panel — web, mobilna aplikacija i backend
 
 Admin panel kroz koji krajnji korisnik (roditelj, vlasnik objekta)
 upravlja svojim Fornect uređajem — bez terminala, MAC adresa i
 config fajlova.
 
-Ovo je **Zadatak 3** POC faze projekta Fornect / NGTF.
+Ovo je **Zadatak 3** POC faze projekta Fornect / NGTF. Tehnička osnova
+za ono što panel smije tvrditi i kako razgovara sa uređajem je
+**Zadatak 1** (Alen Vrbanjac).
+
+---
+
+## Šta je gdje
+
+| Folder | Šta je | Ko ga koristi |
+|---|---|---|
+| `src/` | Angular aplikacija — **ista i za web i za mobilni**. | korisnik, u pregledaču ili na telefonu |
+| `android/` | Capacitor omotač oko `src/`. **Nema svog koda za ekrane.** | build za Android |
+| `server/` | Backend: Fastify + TypeScript + PostgreSQL, migracije, API. Vidi [`server/README.md`](server/README.md). | panel, mobilna aplikacija, Fornect uređaj |
+| `portal/` | Captive portal — stranica pristanka koju servira **sam Fornect uređaj**, ne ovaj server. Vidi [`portal/README.md`](portal/README.md). | gost ili novi uređaj na mreži |
+| `docs/` | Kontrakti sa uređajem: šta cloud šalje, šta uređaj mora uraditi. | onaj ko piše agenta na uređaju (`fornectd`) |
+| `deploy/` | nginx i uputstvo za produkciju. Vidi [`deploy/README.md`](deploy/README.md). | deploy |
+| `tests/` | Playwright e2e testovi, protiv pravog backenda. | razvoj |
+
+**Web i mobilni nemaju odvojen kod.** Svaki ekran iz `src/` je automatski
+i u Android aplikaciji. Posebnog foldera za mobilni kod nema, i to je
+namjerno (vidi *Tehnološke odluke*).
 
 ---
 
 ## Šta aplikacija radi
 
-- **Pregled uređaja na mreži** — bez ručnog unosa MAC adresa
-- **Profil uređaja jednim klikom** — Dijete / Teen / Adult / Admin
-- **Vremenska ograničenja (bedtime)** — birač vremena, po danima
-- **Emergency override** — privremeno dozvoljavanje interneta
-  (15 min / 30 min / 1 sat / do kraja dana)
-- **Uparivanje certifikata** kroz aplikaciju, sa tri nivoa zaštite:
-  isključeno / standardna (DNS) / puna (MITM, traži certifikat)
-- **Status uređaja** — online/offline i verzija softvera
-- **Restrikcije sadržaja** po profilu, sa mogućnošću izmjene
-- **Praćenje prisutnosti** — obavijest kada uređaj napusti mrežu,
-  sa drugačijom porukom ako se to desi usred rasporeda spavanja
-- **Pro modovi** — Hospitality (ugostiteljstvo) i Agency (agencije)
-- **Dva jezika** — bosanski i engleski
+**Home**
+
+- Pregled uređaja na mreži i red „Novi uređaji" za one o kojima još niko
+  nije odlučio
+- Profil uređaja jednim klikom — Dijete / Teen / Adult / Admin, sa
+  ograničenjima sadržaja po profilu
+- Raspored spavanja po danima i hitni izuzetak
+- Tri nivoa zaštite — isključeno / standardna (DNS) / puna (traži
+  certifikat), uz **iskreno navedene brojke**: oko 64% / 70–85% / nikad 100%
+- Pristanak na presretanje: forma, zapis, dokaz certifikata, opoziv, i
+  ponovno prihvatanje kad se politika promijeni
+- Obavještenja na serveru — odlazak sa mreže, nov uređaj, pali pristanak,
+  pun kapacitet, pristanak na staru verziju politike
+
+**Pro**
+
+- Hospitality i Agency vid, kapacitet licence i ekran „kapacitet pun"
+- Tekst i brend captive portala
+
+**Za sve naloge**
+
+- Fleet / OTA: prsten ažuriranja, prozor održavanja, zaustavljanje
+  ažuriranja, set filter lista sa vraćanjem prethodnog, grupne komande
+- Dva jezika — bosanski i engleski
 
 ---
 
-## Preduslovi
+## Pokretanje za razvoj
 
-| Alat | Verzija | Za šta |
-|---|---|---|
-| Node.js | 20+ | web aplikacija |
-| npm | 11+ | paketi |
-| JDK | **21** | Android build (obavezno 21, ne stariji) |
-| Android Studio | novija | Android SDK, emulator |
+Potrebna su **tri** procesa: baza, backend i panel. Panel bez backenda
+samo prikazuje ekran prijave.
 
----
+### 1. Baza i backend
 
-## Web aplikacija
+```bash
+cd server
+npm install
+cp .env.example .env   # popuniti DATABASE_URL, JWT_SECRET, ADMIN_API_KEY
+npm run migrate        # primijeni migracije; bezbjedno pokrenuti više puta
+npm run dev            # http://localhost:3000
+```
+
+Za lokalni rad u `server/.env` podići i ova dva limita (objašnjenje je u
+`.env.example`), inače testovi prolaze jednom na sat:
+
+```
+DEVICE_REGISTER_MAX_PER_HOUR=1000
+HUB_CLAIM_MAX_PER_HOUR=1000
+```
+
+`server/.env` **ne ide u git** — u njemu su lozinka baze i ključevi.
+
+### 2. Panel
 
 ```bash
 npm install
-npm start
+npm start              # http://localhost:4200, /api ide na backend
 ```
 
-Otvoriti `http://localhost:4200/`.
-
-Produkcijski build:
+### 3. Captive portal (po potrebi)
 
 ```bash
-npm run build
+npm run portal         # http://localhost:4300, glumi uređaj
 ```
-
-Rezultat ide u `dist/fornect-admin-web/browser`.
 
 ---
 
 ## Testovi
 
-End-to-end testovi (Playwright, 21 test):
+52 e2e testa: 36 za panel (`tests/fornect.spec.ts`) i 16 za portal
+(`tests/portal.spec.ts`).
+
+**Backend mora biti pokrenut** (korak 1 gore). Panel i portal Playwright
+podiže sam.
 
 ```bash
 npx playwright install    # samo prvi put
-npm run test:e2e
+npx playwright test
 ```
 
-Playwright sam podiže dev server ako već ne radi.
+Prije commita, i provjera tipova na serveru — backend se pokreće kroz
+`tsx`, koji tipove **ne provjerava**, pa zeleni testovi to ne garantuju:
+
+```bash
+cd server
+npm run typecheck
+```
+
+Tekstovi portala se ne prepisuju ručno nego generišu iz panela, jer
+panel i portal korisniku moraju reći istu stvar o dometu zaštite:
+
+```bash
+npm run portal:texts:check
+```
 
 ---
 
 ## Android aplikacija
 
-Aplikacija je Angular web build umotan u [Capacitor](https://capacitorjs.com/).
-Nema odvojenog koda za Android — isti izvorni kod ide i na web i na telefon.
+Aplikacija je isti Angular build umotan u [Capacitor](https://capacitorjs.com/).
+
+### Poznato ograničenje — pročitati prije builda
+
+**Android aplikacija trenutno ne može doći do backenda.**
+
+Adresa API-ja je relativna (`/api/v1` u
+`src/app/core/config/api.config.ts`). Na webu to radi, jer su panel i
+backend na istoj adresi. U Android aplikaciji stranica se učitava iz same
+aplikacije, pa `/api/v1` ne ide na server — prijava i sve ostalo što traži
+backend ne prolazi. Uz to, Android ne dozvoljava običan `http`, a za
+razvoj nema izuzetka.
+
+Aplikacija je dodana dok je panel sve čuvao u pregledaču; poslije prelaska
+na pravi backend nije prilagođena. Za popravku treba **produkcijska adresa
+API-ja** — to je odluka o deployu, ne o kodu.
 
 ### Podešavanje JDK-a (uraditi jednom)
 
@@ -102,6 +174,10 @@ npm run build                    # 1. Angular build
 npx cap sync android             # 2. prebaci web u Android projekat
 ```
 
+Korak 2 se mora ponoviti poslije svake izmjene u `src/` — kopija weba u
+`android/` nije u gitu, pa aplikacija ima onoliko koliko je bilo pri
+posljednjem syncu.
+
 Zatim ili kroz Android Studio (otvoriti folder `android`, pa
 **Run 'app'**), ili iz komandne linije:
 
@@ -112,69 +188,45 @@ cd android
 
 APK se pravi u `android/app/build/outputs/apk/debug/app-debug.apk`.
 
-Instalacija na emulator ili telefon:
-
 ```bash
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.fornect.admin/.MainActivity
 ```
 
-> `adb` je u `<Android SDK>/platform-tools/`. Ako komanda nije
-> prepoznata, koristiti punu putanju do `adb`.
+> `adb` je u `<Android SDK>/platform-tools/`.
 
 ---
 
-## Struktura projekta
+## Struktura `src/`
 
 ```
 src/app/
 ├── core/
-│   ├── services/     stanje aplikacije (auth, device, hub,
-│   │                 notification, schedule, language)
-│   ├── guards/       zaštita ruta
-│   └── pipes/        translate pipe
-└── features/         ekrani (dashboard, devices, device-details,
-                      protection, schedule, notifications,
-                      settings, pro-*, ...)
-android/              Capacitor Android projekat (generisan)
-tests/                Playwright e2e testovi
+│   ├── config/       adresa API-ja
+│   ├── services/     sav razgovor sa backendom (auth, device, hub,
+│   │                 consent, notification, portal-settings, fleet,
+│   │                 language...)
+│   ├── interceptors/ dodaje prijavu (JWT) na svaki poziv API-ja
+│   └── guards/       zaštita ruta
+├── shared/           translate pipe, zajedničke komponente
+└── features/         ekrani — jedan folder po ekranu
 ```
 
----
-
-## Stanje podataka — važno
-
-U POC fazi **nema backend-a**: sve stanje (nalozi, uređaji,
-profili, rasporedi, obavještenja) čuva se u `localStorage`
-browsera, odvojeno po nalogu.
-
-Aplikacija je namjerno strukturirana tako da je povezivanje na
-pravi API kontrolisana izmjena: sve ide kroz servise u
-`src/app/core/services/`, pa se mijenja samo njihova unutrašnjost
-(čitanje i pisanje podataka), dok komponente i UI ostaju netaknuti.
-
-Poznato ograničenje: obavještenje o uređaju koji je napustio mrežu
-računa se kada je aplikacija otvorena. Za obavještenje u realnom
-vremenu (dok je aplikacija zatvorena) potreban je server koji prati
-heartbeat uređaja i šalje push — to je van opsega POC faze.
+Komponente ne zovu API direktno — sve ide kroz servise u `core/services/`.
 
 ---
 
 ## Tehnološke odluke
 
-- **Angular 22** (standalone komponente + signali) — signali daju
-  reaktivno stanje bez dodatne biblioteke za state management,
-  a standalone komponente uklanjaju NgModule sloj.
-- **Capacitor** umjesto zasebne mobilne aplikacije — isti kod za
-  web i mobilni, jedna baza koda za održavanje, a POC traži i web
-  i mobilnu verziju u istom roku.
-- **Vlastiti i18n** (bs/en) umjesto biblioteke — samo dva jezika,
-  bez potrebe za dodatnom zavisnošću; parnost ključeva se provjerava.
-- **localStorage** u POC fazi — backend (Fastify Admin API) je
-  odvojen zadatak; ovako je UI mogao biti završen i demonstriran
-  nezavisno od njega.
-- **Playwright** za e2e — testira stvarno ponašanje u browseru,
-  uključujući mobilne širine i veličinu dodirnih meta.
+- **Angular 22** (standalone komponente + signali, bez zone.js) — signali
+  daju reaktivno stanje bez dodatne biblioteke. Posljedica: polje koje se
+  mijenja asinhrono, a nije signal, traži `markForCheck()`.
+- **Capacitor** umjesto zasebne mobilne aplikacije — isti kod za web i
+  mobilni, jedna baza koda za održavanje.
+- **Vlastiti i18n** (bs/en) — samo dva jezika; parnost ključeva se
+  provjerava, a tekstovi portala se generišu iz panela.
+- **Playwright** za e2e — testira stvarno ponašanje u pregledaču, protiv
+  pravog backenda i baze, uključujući mobilne širine.
 
 ---
 
@@ -182,5 +234,4 @@ heartbeat uređaja i šalje push — to je van opsega POC faze.
 
 Frontend se deployuje kao nginx-servirana statička slika (root
 `Dockerfile`), odvojeno od backend servisa (`server/Dockerfile`).
-Detalji, dva razmatrana pristupa i preporuka — vidi
-[`deploy/README.md`](deploy/README.md).
+Detalji — vidi [`deploy/README.md`](deploy/README.md).

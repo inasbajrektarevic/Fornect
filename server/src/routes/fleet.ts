@@ -235,8 +235,8 @@ export async function fleetRoutes(fastify: FastifyInstance): Promise<void> {
       try {
         await client.query('BEGIN');
 
-        const { rows: owned } = await client.query<{ id: string }>(
-          'SELECT id FROM devices WHERE id = $1 AND claimed_by_account_id = $2',
+        const { rows: owned } = await client.query<{ id: string; kind: string }>(
+          'SELECT id, kind FROM devices WHERE id = $1 AND claimed_by_account_id = $2',
           [request.params.id, request.accountId],
         );
 
@@ -244,6 +244,27 @@ export async function fleetRoutes(fastify: FastifyInstance): Promise<void> {
           await client.query('ROLLBACK');
 
           return reply.code(404).send({ error: 'Uređaj nije pronađen.' });
+        }
+
+        // Zadatak 1, Oblast C i Tačka 1: Ultimate i TIF su zabranjeni na
+        // Home liniji. Ultimate sam zauzme ~1,8-2 GB, a Home uređaj ima
+        // 2 GB — Pi-hole bi pao na nedostatku memorije, i sa njim svo
+        // razrješavanje imena na mreži. Zaštita koja obori internet je
+        // gora od slabije zaštite.
+        if (owned[0].kind === 'home') {
+          const tooLarge = urls.filter(isHeavyList);
+
+          if (tooLarge.length > 0) {
+            await client.query('ROLLBACK');
+
+            return reply.code(400).send({
+              code: 'list-too-large-for-home',
+              error:
+                'HaGeZi Ultimate i TIF liste nisu dozvoljene na Home uređaju — ' +
+                `prevelike su za njegovu memoriju: ${tooLarge.join(', ')}`,
+              urls: tooLarge,
+            });
+          }
         }
 
         await client.query(
@@ -490,6 +511,35 @@ async function rollbackHubLists(
   await syncDeviceConfig(client, accountId, deviceId);
 
   return { status: 'applied' };
+}
+
+/**
+ * Da li je lista iz porodice koja je na Home liniji zabranjena
+ * (HaGeZi Ultimate i TIF).
+ *
+ * OGRANIČENJE, rečeno otvoreno: ovo prepoznaje listu po IMENU u adresi
+ * (`.../ultimate.txt`, `multi.ultimate`, `tif.medium.txt`...). Stvarna
+ * granica je broj domena i memorija, a to zna samo uređaj. Ista lista
+ * pod drugim imenom bi prošla ovdje — zato kontrakt traži da i uređaj
+ * provjeri veličinu prije nego je učita (docs/fleet-ota-kontrakt.md).
+ * Kad bude postojao naš mirror, imena su naša i ova provjera postaje
+ * pouzdanija.
+ *
+ * Gleda se samo putanja, rastavljena na riječi, da „tif" ne bi
+ * pogodilo slučajno ime nekog domena ili foldera koje ga samo sadrži.
+ */
+function isHeavyList(url: string): boolean {
+  let path: string;
+
+  try {
+    path = new URL(url).pathname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  const words = path.split(/[^a-z0-9]+/).filter(Boolean);
+
+  return words.includes('ultimate') || words.includes('tif');
 }
 
 /**

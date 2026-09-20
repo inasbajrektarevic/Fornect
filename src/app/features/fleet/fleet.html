@@ -13,7 +13,7 @@
 
   <main class="content">
     @if (errorKey()) {
-      <p class="error">{{ errorKey() | translate }}</p>
+      <p class="error" id="fleet-error">{{ errorKey() | translate: errorParams() }}</p>
     }
 
     @if (errorText()) {

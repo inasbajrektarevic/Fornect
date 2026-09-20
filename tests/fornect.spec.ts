@@ -104,9 +104,13 @@ interface RegisteredHub {
 //
 // Obje rute su ogranicene po IP-u: /devices/register
 // (DEVICE_REGISTER_MAX_PER_HOUR) i /hub/claim (HUB_CLAIM_MAX_PER_HOUR),
-// obje podrazumijevano 10 na sat. To je zastita i ostaje takva. Testovi
-// idu sa iste adrese, a hub registruje i upari njih osam, pa za lokalni
-// rad obje vrijednosti treba podici u server/.env.
+// obje podrazumijevano 10 na sat. To je zastita i ostaje takva. Za
+// lokalni rad obje vrijednosti treba podici u server/.env.
+//
+// PRAVILO ZA NOVE TESTOVE: suite sada poziva ovu funkciju TACNO deset
+// puta — koliko je i zadani limit. Test koji treba hub neka koristi
+// postojeci (seedHub, ili dopuni test koji ga vec ima). Jedanaesti poziv
+// rusi prvo pokretanje kod svakoga ko limit nije podigao.
 //
 // Zato se provjeravaju OBA odgovora, odmah i odvojeno. Bez toga 429
 // izgleda kao "undefined" pet redova kasnije. I desilo se tacno to:
@@ -1447,6 +1451,28 @@ test('31 - a bad filter list set can be rolled back in one click', async ({ page
 
   expect(insecure.status()).toBe(400);
 
+  // Zadatak 1, Oblast C i Tacka 1: Ultimate i TIF su zabranjeni na Home
+  // liniji — prevelike su za 2 GB, a Pi-hole bez memorije obori internet
+  // cijeloj mrezi. seedHub pravi Home hub, pa se ovo provjerava ovdje:
+  // novi test sa svojim hubom prebacio bi zadani limit registracija.
+  const hagezi = 'https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard';
+  const ultimate = `${hagezi}/ultimate.txt`;
+  const tif = `${hagezi}/tif.medium.txt`;
+
+  const tooLarge = await page.request.put(`/api/v1/app/fleet/${hub.id}/lists`, {
+    headers,
+    data: { urls: [`${hagezi}/pro.txt`, ultimate, tif], label: 'Previse' },
+  });
+
+  expect(tooLarge.status()).toBe(400);
+
+  const refusal = await tooLarge.json();
+
+  expect(refusal.code).toBe('list-too-large-for-home');
+
+  // Kaze TACNO koje su odbijene; Pro, koji je dozvoljen, nije medju njima.
+  expect(refusal.urls).toEqual([ultimate, tif]);
+
   await page.request.put(`/api/v1/app/fleet/${hub.id}/lists`, {
     headers,
     data: { urls: ['https://lists.example.com/dobra.txt'], label: 'Dobra lista' },
@@ -1458,6 +1484,19 @@ test('31 - a bad filter list set can be rolled back in one click', async ({ page
   });
 
   await page.goto('/fleet');
+
+  // Isto odbijanje u panelu, na jeziku korisnika a ne sa servera.
+  await page.getByRole('button', { name: 'Edit lists' }).click();
+
+  const editor = page.locator('.block', { has: page.locator('textarea') });
+
+  await editor.locator('textarea').fill(ultimate);
+  await editor.getByRole('button', { name: 'Save', exact: true }).click();
+
+  await expect(page.locator('#fleet-error')).toContainText('not allowed on a Home device');
+  await expect(page.locator('#fleet-error')).toContainText('ultimate.txt');
+
+  await editor.getByRole('button', { name: 'Cancel' }).click();
 
   await expect(page.getByText('Losa lista')).toBeVisible();
 

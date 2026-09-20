@@ -49,6 +49,9 @@ export class Fleet {
   readonly errorKey = signal('');
   readonly errorText = signal('');
 
+  /** Parametri za prevod greške (npr. koje liste su odbijene). */
+  readonly errorParams = signal<Record<string, string>>({});
+
   /** URL-ovi koje server prijavljuje kao direktan izvor (rate-limit rizik). */
   readonly warnings = signal<string[]>([]);
 
@@ -231,6 +234,7 @@ export class Fleet {
     this.busy.set(true);
     this.errorKey.set('');
     this.errorText.set('');
+    this.errorParams.set({});
     this.saved.set(false);
 
     try {
@@ -238,10 +242,16 @@ export class Fleet {
 
       this.saved.set(true);
     } catch (error) {
-      const message = (error as { error?: { error?: string } })?.error?.error;
+      const body = (error as { error?: { error?: string; code?: string; urls?: string[] } })
+        ?.error;
 
-      if (message) {
-        this.errorText.set(message);
+      // Greška sa kodom ima svoj prevod; tekst sa servera je samo za
+      // one koji čitaju odgovor bez panela, i na bosanskom je.
+      if (body?.code) {
+        this.errorKey.set(`fleet.error.${body.code}`);
+        this.errorParams.set({ urls: (body.urls ?? []).join(', ') });
+      } else if (body?.error) {
+        this.errorText.set(body.error);
       } else {
         this.errorKey.set('fleet.saveFailed');
       }
