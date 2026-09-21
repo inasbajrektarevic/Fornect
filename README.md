@@ -131,20 +131,30 @@ npm run portal:texts:check
 
 Aplikacija je isti Angular build umotan u [Capacitor](https://capacitorjs.com/).
 
-### Poznato ograničenje — pročitati prije builda
+### Na koji backend ide aplikacija — pročitati prije builda
 
-**Android aplikacija trenutno ne može doći do backenda.**
+Android aplikacija razgovara sa **produkcijskim** backendom
+(`https://admin.lukmandavran.cc/api/v1`), a pregledač sa onim na istoj
+adresi kao panel. Izbor pravi `src/app/core/config/api.config.ts`, po tome
+da li kod radi u aplikaciji ili u pregledaču.
 
-Adresa API-ja je relativna (`/api/v1` u
-`src/app/core/config/api.config.ts`). Na webu to radi, jer su panel i
-backend na istoj adresi. U Android aplikaciji stranica se učitava iz same
-aplikacije, pa `/api/v1` ne ide na server — prijava i sve ostalo što traži
-backend ne prolazi. Uz to, Android ne dozvoljava običan `http`, a za
-razvoj nema izuzetka.
+Dvije posljedice koje treba znati:
 
-Aplikacija je dodana dok je panel sve čuvao u pregledaču; poslije prelaska
-na pravi backend nije prilagođena. Za popravku treba **produkcijska adresa
-API-ja** — to je odluka o deployu, ne o kodu.
+- **Aplikacija vidi ono što je deployano, ne tvoj lokalni kod.** Nove
+  funkcije proradiće na telefonu tek kad se backend sa njihovim
+  migracijama deployuje. Dok produkcija nema migracije 008–019, novi
+  panel u aplikaciji razgovara sa starim backendom: najviše što se može
+  očekivati je prijava postojećim nalogom (nije provjereno), a
+  registracija, pristanak, obavještenja, portal i Fleet ne.
+- **Za probu protiv lokalnog backenda** privremeno promijeni adresu u
+  `api.config.ts` na `http://<IP računara>:3000/api/v1` — i tada Android
+  traži dozvolu za običan `http` (samo debug build). Tu izmjenu ne
+  commitovati.
+
+Poznato ograničenje: „Preuzmi certifikat" pravi fajl u pregledaču, a
+WebView na Androidu takvo preuzimanje ne snima bez dodatnog plugina.
+Certifikat se ionako instalira na uređaj koji se štiti, najčešće kroz
+captive portal, a ne na telefon roditelja.
 
 ### Podešavanje JDK-a (uraditi jednom)
 

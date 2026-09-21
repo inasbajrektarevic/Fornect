@@ -1082,15 +1082,23 @@ test('26 - leaving the network during bedtime is recorded on the server', async 
 
   await page.goto('/notifications');
 
-  await expect(
-    page.getByText('Device left the network during bedtime'),
-  ).toBeVisible();
+  // Provjerava se obavjestenje O iPHONEU, ne bilo koje. Pocetni podaci
+  // imaju i PlayStation, koji je namjerno van mreze (test 21) i ima
+  // raspored 22:00-08:00 radnim danom. Pokrenut u tom vremenu, i on je
+  // stvarno "napustio mrezu za vrijeme spavanja" - server ispravno
+  // pravi i to obavjestenje, a nevezan lokator nadje dva i padne.
+  // Raspored iPhonea je namjesten oko trenutnog vremena; pocetni podaci
+  // nisu, i to se dugo nije vidjelo jer se testovi nisu pokretali nocu.
+  const iphoneNotice = page
+    .getByRole('article')
+    .filter({ hasText: "Amar's iPhone" })
+    .filter({ hasText: 'Device left the network during bedtime' });
 
-  await expect(page.getByText("Amar's iPhone").first()).toBeVisible();
+  await expect(iphoneNotice).toBeVisible();
 
   // Vrijeme je stvarno, a ne dio teksta. Ranije je pisalo "1 hour ago"
   // i sedmicu kasnije.
-  await expect(page.locator('.notification-time').first()).toHaveText(
+  await expect(iphoneNotice.locator('.notification-time')).toHaveText(
     /just now|\d+ min ago|today at \d{2}:\d{2}/,
   );
 
@@ -1130,7 +1138,10 @@ test('26 - leaving the network during bedtime is recorded on the server', async 
   await freshPage.goto('/notifications');
 
   await expect(
-    freshPage.getByText('Device left the network during bedtime'),
+    freshPage
+      .getByRole('article')
+      .filter({ hasText: "Amar's iPhone" })
+      .getByText('Device left the network during bedtime'),
   ).toBeVisible();
 
   await fresh.close();
