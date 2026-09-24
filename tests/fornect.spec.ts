@@ -1210,6 +1210,17 @@ test('27 - devices beyond the licence are named, and a freed slot is noticed', a
 
   await page.goto('/devices');
 
+  // Prvo se saceka da se lista uopste pojavi, sa vise vremena nego
+  // podrazumijevanih 5 s. Test je jednom pao ("flaky", 24.09.): server
+  // je listu vratio za 9 ms, 1,6 s poslije otvaranja stranice, ali ju je
+  // ekran iscrtao tek ~3 s kasnije — dok su dva testa radila paralelno.
+  // Sam, pet puta zaredom, prolazi svaki put. Traka ispod se tek onda
+  // provjerava sa uobicajenim rokom: ako lista stoji, a traka ne, to je
+  // greska, ne sporost.
+  await expect(page.getByRole('heading', { name: "Amar's iPhone" })).toBeVisible({
+    timeout: 15_000,
+  });
+
   await expect(page.getByText('Licence capacity exceeded')).toBeVisible();
 
   await page.getByRole('link', { name: 'See details' }).click();
@@ -2194,6 +2205,10 @@ test('39 - choosing full protection at setup leads to consent, it does not switc
   // Sljedeci korak je pristanak, ne gotova puna zastita.
   await expect(page).toHaveURL(new RegExp(`/devices/${deviceId}/protection\\?consent=start$`));
   await expect(page.getByRole('heading', { name: 'Consent to full protection' })).toBeVisible();
+
+  // Ekran se sam spusti do forme — ne ostaje na vrhu stranice.
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await expect(page.getByRole('heading', { name: 'Consent to full protection' })).toBeInViewport();
 
   const { token } = await apiLogin(page, seeded.email);
   const headers = { Authorization: `Bearer ${token}` };

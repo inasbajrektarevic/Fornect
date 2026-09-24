@@ -1,4 +1,10 @@
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  inject
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   ActivatedRoute,
@@ -69,6 +75,8 @@ export class Protection {
    */
   private readonly changeDetector = inject(ChangeDetectorRef);
 
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
   deviceId =
     this.route.snapshot.paramMap.get('id') ??
     'amar-iphone';
@@ -92,6 +100,15 @@ export class Protection {
       !this.certificateInstalled
     ) {
       this.openConsentForm();
+
+      // Forma stoji ispod kartica nivoa zaštite — na telefonu daleko
+      // ispod ivice ekrana. Bez ovoga korisnik dođe sa "Završi
+      // podešavanje" na vrh stranice i ne vidi da ga čeka pristanak.
+      afterNextRender(() => {
+        this.host.nativeElement
+          .querySelector('.consent-form')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }
   }
 
