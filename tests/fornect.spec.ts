@@ -2021,3 +2021,89 @@ test('36 - group commands pause a ring and undo a list set only where it is acti
 
   expect(blind.status()).toBe(400);
 });
+
+// Aplikacija radi bez zone.js. Poruka koja se postavi tek kad server
+// odgovori ne pojavi se sama ako je u obicnom polju — pojavi se tek na
+// sljedeci klik. Tako je radila registracija sa postojecom adresom
+// (prijavio Inas, 24.09). Oba testa klikcu TACNO jednom: na starom kodu
+// padaju, jer poruke nema.
+test('37 - an existing email is reported on the first click', async ({ page }) => {
+  const email = uniqueEmail('register-existing');
+
+  const existing = await page.request.post('/api/v1/auth/register', {
+    data: { name: 'First Owner', email, password: PASSWORD },
+  });
+
+  expect(existing.status()).toBe(201);
+
+  await page.goto('/register');
+
+  await page.getByRole('button', { name: 'EN' }).click();
+
+  await page.getByLabel('Full name').fill('Second Owner');
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password', { exact: true }).fill('Fornect2026');
+  await page.getByLabel('Confirm password').fill('Fornect2026');
+
+  await page.getByRole('button', { name: 'Create account' }).click();
+
+  await expect(page.getByText('An account with this email already exists.')).toBeVisible();
+
+  await expect(page).toHaveURL(/\/register$/);
+});
+
+// Odgovor na uparivanje se ovdje NAMJERNO glumi (page.route), umjesto
+// pravog /hub/claim. Svaki poziv te rute, i sa pogresnim kodom, trosi
+// HUB_CLAIM_MAX_PER_HOUR — a suite je vec na zadanom limitu (vidi
+// registerHub). Test i ne provjerava server nego da li ekran prikaze
+// odgovor; da server pogresan kod odbija, pokriva backend.
+test('38 - the pairing screen shows the answer without a second click', async ({ page }) => {
+  await login(page, { withDevices: false });
+
+  await page.goto('/pair-device');
+
+  await page.getByRole('button', { name: /Pairing code/ }).click();
+
+  const pairButton = page.getByRole('button', { name: 'Pair device' });
+
+  await page.route('**/api/v1/app/hub/claim', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Invalid pairing code.' }),
+    }),
+  );
+
+  await page.getByLabel('Pairing code').fill('000000');
+  await pairButton.click();
+
+  await expect(
+    page.getByText('The code is wrong, expired, or the device is already paired.'),
+  ).toBeVisible();
+
+  // Na starom kodu je dugme ostajalo onemoguceno, pa ni drugi klik
+  // nije pomagao — tek kucanje u polje.
+  await expect(pairButton).toBeEnabled();
+
+  await page.unroute('**/api/v1/app/hub/claim');
+
+  await page.route('**/api/v1/app/hub/claim', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'FN-TEST-0038',
+        name: 'Fornect Home',
+        kind: 'home',
+        mode: 'home',
+        capacity: null,
+        online: true,
+        connected_devices: 0,
+      }),
+    }),
+  );
+
+  await pairButton.click();
+
+  await expect(page.getByRole('heading', { name: 'Fornect Home is connected' })).toBeVisible();
+});

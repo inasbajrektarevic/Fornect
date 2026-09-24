@@ -1,4 +1,5 @@
 ﻿import {
+  ChangeDetectorRef,
   Component,
   inject,
   OnDestroy
@@ -38,11 +39,17 @@ export class DeviceDetails implements OnDestroy {
   private readonly deviceService = inject(DeviceService);
   private readonly languageService = inject(LanguageService);
 
+  private readonly changeDetector = inject(ChangeDetectorRef);
+
   private now = Date.now();
 
+  // Odbrojavanje hitnog izuzetka i rasporeda. Bez zone.js promjena
+  // polja iz tajmera ne osvjezava ekran sama, pa bi preostale minute
+  // stajale dok korisnik nesto ne klikne.
   private readonly countdownTimer =
     window.setInterval(() => {
       this.now = Date.now();
+      this.changeDetector.markForCheck();
     }, 30000);
 
   deviceId =

@@ -1,4 +1,4 @@
-﻿import { Component, inject } from '@angular/core';
+﻿import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   Router,
@@ -35,7 +35,12 @@ export class Register {
   password = '';
   confirmPassword = '';
 
-  errorMessageKey = '';
+  // Signal, ne obicno polje - isti razlog kao u login.ts. Aplikacija
+  // radi bez zone.js: poruka "nalog vec postoji" se postavlja tek kad
+  // server odgovori (poslije await-a), a promjena obicnog polja u tom
+  // trenutku ne osvjezava ekran. Poruka se pojavljivala tek na drugi
+  // klik. Pisanje u signal uvijek osvjezi ekran.
+  readonly errorMessageKey = signal('');
 
   get currentLanguage(): AppLanguage {
     return this.languageService.currentLanguage();
@@ -46,7 +51,7 @@ export class Register {
   }
 
   async submit(): Promise<void> {
-    this.errorMessageKey = '';
+    this.errorMessageKey.set('');
 
     const name = this.name.trim();
 
@@ -54,20 +59,17 @@ export class Register {
       this.email.trim().toLowerCase();
 
     if (!name) {
-      this.errorMessageKey =
-        'register.enterName';
+      this.errorMessageKey.set('register.enterName');
       return;
     }
 
     if (!email || !email.includes('@')) {
-      this.errorMessageKey =
-        'register.invalidEmail';
+      this.errorMessageKey.set('register.invalidEmail');
       return;
     }
 
     if (this.password.length < 8) {
-      this.errorMessageKey =
-        'register.passwordMin';
+      this.errorMessageKey.set('register.passwordMin');
       return;
     }
 
@@ -75,8 +77,7 @@ export class Register {
       this.password !==
       this.confirmPassword
     ) {
-      this.errorMessageKey =
-        'register.passwordMismatch';
+      this.errorMessageKey.set('register.passwordMismatch');
       return;
     }
 
@@ -96,13 +97,11 @@ export class Register {
         error.message ===
           'An account with this email already exists.'
       ) {
-        this.errorMessageKey =
-          'register.emailExists';
+        this.errorMessageKey.set('register.emailExists');
         return;
       }
 
-      this.errorMessageKey =
-        'register.unable';
+      this.errorMessageKey.set('register.unable');
     }
   }
 }

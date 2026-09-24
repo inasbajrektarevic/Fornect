@@ -1,4 +1,4 @@
-﻿import { Component, inject } from '@angular/core';
+﻿import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   Router,
@@ -47,6 +47,16 @@ export class DevicePairing {
 
   private readonly router =
     inject(Router);
+
+  /**
+   * Aplikacija radi bez zone.js. Odgovor na uparivanje stize poslije
+   * await-a, a promjena obicnih polja tada ne osvjezava ekran sama. Bez
+   * ovoga je pogresan kod ostavljao dugme onemoguceno i bez poruke,
+   * a uspjesno uparivanje nije prikazivalo ekran "Uredjaj je uparen" -
+   * sve dok korisnik ne bi nesto otkucao ili kliknuo.
+   */
+  private readonly changeDetector =
+    inject(ChangeDetectorRef);
 
   method: PairingMethod = 'qr';
 
@@ -113,6 +123,7 @@ export class DevicePairing {
       this.errorMessageKey = 'pair.invalidSerial';
     } finally {
       this.submitting = false;
+      this.changeDetector.markForCheck();
     }
   }
 
