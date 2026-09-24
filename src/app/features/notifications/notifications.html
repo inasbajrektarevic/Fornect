@@ -10,6 +10,13 @@
       <p class="subtitle">
         {{ 'notifications.subtitle' | translate }}
       </p>
+
+      <!-- Push poruka još nema: server pravi obavještenje, ali telefon
+           ga vidi tek kad se aplikacija ili ovaj ekran otvori. To se
+           kaže, ne prešućuje (mobilni brief, sekcija 2). -->
+      <p class="subtitle" data-testid="no-push-note">
+        {{ 'notifications.noPushNote' | translate }}
+      </p>
     </div>
 
     <a

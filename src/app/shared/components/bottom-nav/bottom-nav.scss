@@ -1,0 +1,81 @@
+/* Samo na telefonu. Na širem ekranu komponenta ne zauzima ni piksel,
+   pa desktop i testovi na desktop širini ostaju isti. */
+:host {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  :host {
+    display: block;
+  }
+
+  /* Rezerviše mjesto ispod sadržaja, da traka ne prekrije zadnji red. */
+  .spacer {
+    height: 68px;
+  }
+
+  nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    display: flex;
+    padding: 4px var(--fn-safe-right) var(--fn-safe-bottom) var(--fn-safe-left);
+    border-top: 1px solid var(--fn-border);
+    background: var(--fn-surface);
+    box-shadow: 0 -4px 16px rgba(23, 32, 51, 0.06);
+  }
+
+  a {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 56px;
+    color: var(--fn-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  a span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  a.active {
+    color: var(--fn-orange-strong);
+  }
+
+  svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .badge {
+    position: absolute;
+    top: 4px;
+    left: calc(50% + 6px);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+  }
+}

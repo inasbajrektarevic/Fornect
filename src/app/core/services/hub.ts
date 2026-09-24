@@ -18,6 +18,13 @@ export interface HubInfo {
   online: boolean;
   capacity: number;
   connectedUsers: number;
+  /**
+   * Server je potvrdio da je hub uparen sa nalogom. `false` za
+   * podrazumijevanu vrijednost bez huba — tada ime, "online" i
+   * kapacitet nisu stvarni podaci i ekran ih ne smije prikazati kao
+   * stanje uređaja.
+   */
+  paired?: boolean;
 }
 
 export interface LoadPoint {
@@ -131,6 +138,7 @@ export class HubService {
       online: response.online,
       capacity: response.capacity ?? 0,
       connectedUsers: response.connected_devices,
+      paired: true,
     };
 
     this.hub.set(hub);
@@ -204,6 +212,7 @@ export class HubService {
         online: response.online,
         capacity: response.capacity ?? 0,
         connectedUsers: response.connected_devices,
+        paired: true,
       };
 
       this.hub.set(hub);
@@ -263,6 +272,7 @@ export class HubService {
       online: true,
       capacity: 20,
       connectedUsers: 4,
+      paired: false,
     };
 
     // Podrazumijevano stanje se odmah snima da bi uređaj

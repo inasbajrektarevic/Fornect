@@ -42,6 +42,11 @@
   font-weight: 600;
 }
 
+.status.offline {
+  background: var(--fn-surface-muted);
+  color: var(--fn-muted);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -242,6 +247,23 @@
   font-size: 14px;
 }
 
+.device-detail .not-reported {
+  color: var(--fn-muted);
+  font-weight: 500;
+}
+
+.pair-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: var(--fn-orange-btn);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 @media (max-width: 760px) {
   .device-status-card {
     align-items: flex-start;
@@ -262,7 +284,7 @@
 }
 
 .logout-button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--fn-border-strong);
   border-radius: 10px;
@@ -303,8 +325,8 @@
 
 .notification-button {
   position: relative;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border: 1px solid var(--fn-border);
@@ -351,8 +373,8 @@
 }
 
 .settings-button {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border: 1px solid var(--fn-border);

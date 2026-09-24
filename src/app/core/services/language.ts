@@ -33,8 +33,19 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'dashboard.fornectDevice': 'Fornect uređaj',
     'dashboard.mainDevice': 'Glavni uređaj za zaštitu mreže',
     'dashboard.software': 'Softver',
-    'dashboard.lastSeen': 'Posljednji put viđen',
-    'dashboard.justNow': 'Upravo sada',
+    'dashboard.versionNotReported': 'Uređaj ne prijavljuje verziju',
+    'dashboard.noDevice': 'Nijedan uređaj nije uparen',
+    'dashboard.noDeviceText':
+      'Uparite Fornect uređaj kodom sa njegovog ekrana. Do tada panel nema stanje uređaja koje bi prikazao.',
+    'dashboard.pairDevice': 'Upari uređaj',
+    'nav.label': 'Glavna navigacija',
+    'nav.home': 'Početna',
+    'override.title': 'Internet pauziran po rasporedu',
+    'override.pausedNow': 'Pauzirano sada',
+    'override.allowedFor': 'Dozvoljeno još {minutes} min',
+    'override.allowedToday': 'Dozvoljeno do kraja dana',
+    'notifications.noPushNote':
+      'Obavještenja se osvježavaju kad otvorite aplikaciju ili ovaj ekran. Telefon ih još ne prima kao push poruke, pa dok je aplikacija zatvorena ne stiže ni zvuk ni poruka.',
     'dashboard.quickActions': 'Brze akcije',
     'dashboard.devices': 'Uređaji',
     'dashboard.pauseInternet': 'Pauziraj internet',
@@ -892,6 +903,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Skeniranje kamerom još nije povezano — unesite kod ručno.',
 
     'pair.deviceSerial': 'Kod za uparivanje',
+    'pair.digitLabel': 'Cifra {n} od 6',
     'pair.invalidSerial':
       'Kod je netačan, istekao je, ili je uređaj već uparen. Zatražite novi kod na uređaju.',
     'pair.pairDevice': 'Upari uređaj',
@@ -1193,8 +1205,19 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'dashboard.fornectDevice': 'Fornect device',
     'dashboard.mainDevice': 'Main network protection device',
     'dashboard.software': 'Software',
-    'dashboard.lastSeen': 'Last seen',
-    'dashboard.justNow': 'Just now',
+    'dashboard.versionNotReported': 'The device does not report its version',
+    'dashboard.noDevice': 'No device paired',
+    'dashboard.noDeviceText':
+      'Pair a Fornect device with the code on its screen. Until then the panel has no device state to show.',
+    'dashboard.pairDevice': 'Pair device',
+    'nav.label': 'Main navigation',
+    'nav.home': 'Home',
+    'override.title': 'Internet paused by schedule',
+    'override.pausedNow': 'Paused now',
+    'override.allowedFor': 'Allowed for {minutes} more min',
+    'override.allowedToday': 'Allowed until the end of today',
+    'notifications.noPushNote':
+      'Notifications refresh when you open the app or this screen. Your phone does not receive them as push messages yet, so while the app is closed no sound or alert arrives.',
     'dashboard.quickActions': 'Quick actions',
     'dashboard.devices': 'Devices',
     'dashboard.pauseInternet': 'Pause internet',
@@ -2049,6 +2072,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Camera scanning isn\'t connected yet — enter the code manually.',
 
     'pair.deviceSerial': 'Pairing code',
+    'pair.digitLabel': 'Digit {n} of 6',
     'pair.invalidSerial':
       'The code is wrong, expired, or the device is already paired. Request a new code on the device.',
     'pair.pairDevice': 'Pair device',

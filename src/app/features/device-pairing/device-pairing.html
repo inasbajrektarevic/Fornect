@@ -105,21 +105,28 @@
 
           <section class="serial-section">
 
-            <div class="form-field">
-              <label for="serialNumber">
+            <fieldset class="code-field">
+              <legend>
                 {{ 'pair.deviceSerial' | translate }}
-              </label>
+              </legend>
 
-              <input
-                id="serialNumber"
-                name="serialNumber"
-                type="text"
-                inputmode="numeric"
-                maxlength="6"
-                [(ngModel)]="serialNumber"
-                placeholder="npr. 482913"
-              />
-            </div>
+              <div class="code-boxes">
+                @for (i of digitIndexes; track i) {
+                  <input
+                    #digit
+                    type="text"
+                    inputmode="numeric"
+                    [attr.autocomplete]="i === 0 ? 'one-time-code' : 'off'"
+                    [attr.aria-label]="'pair.digitLabel' | translate: { n: i + 1 }"
+                    [value]="digits()[i]"
+                    (input)="onDigitInput(i, $event)"
+                    (keydown)="onDigitKeydown(i, $event)"
+                    (paste)="onCodePaste(i, $event)"
+                    (focus)="$any($event.target).select()"
+                  />
+                }
+              </div>
+            </fieldset>
 
             @if (errorMessageKey) {
               <div class="error-message">

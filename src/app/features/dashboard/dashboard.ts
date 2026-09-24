@@ -9,12 +9,14 @@ import {
   FornectNetworkDevice
 } from '../../core/services/device';
 
+import { HubService } from '../../core/services/hub';
 import { isPausedAt } from '../../core/services/schedule';
 import { ConnectionBanner } from '../../shared/components/connection-banner/connection-banner';
+import { QuickOverride } from '../../shared/components/quick-override/quick-override';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink, TranslatePipe, ConnectionBanner],
+  imports: [RouterLink, TranslatePipe, ConnectionBanner, QuickOverride],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss'
 })
@@ -22,16 +24,29 @@ export class Dashboard {
   private readonly authService = inject(AuthService);
   private readonly deviceService = inject(DeviceService);
   private readonly notificationService = inject(NotificationService);
+  private readonly hubService = inject(HubService);
   private readonly router = inject(Router);
 
   networkPaused = this.loadNetworkPaused();
 
-  fornectDevice = {
-    name: 'Fornect Home',
-    online: true,
-    softwareVersion: '0.1.0',
-    lastSeen: 'Just now'
-  };
+  /**
+   * Fornect uređaj kakav ga javlja server (GET /app/hub).
+   *
+   * Ranije je ovdje stajao zakucan objekat: "online", "v0.1.0",
+   * "viđen upravo sada" — i za nalog koji uopšte nema uređaj. Nijedan
+   * od ta tri podatka server ne daje. Verziju softvera uređaj još ne
+   * javlja (brief, sekcija 2: ekran piše da je ne javlja, ne izmišlja
+   * je), a "posljednji put viđen" API ne vraća, pa se ne prikazuje.
+   */
+  get fornectDevice(): { paired: boolean; name: string; online: boolean } {
+    const hub = this.hubService.hub();
+
+    return {
+      paired: hub.paired === true,
+      name: hub.name,
+      online: hub.online,
+    };
+  }
 
   get unreadNotifications(): number {
     return this.notificationService.unreadCount();

@@ -45,6 +45,15 @@
    * dovoljno zamijeniti ovu jednu vrijednost. */
   --fn-font: 'Segoe UI Variable Text', 'Segoe UI', system-ui,
     -apple-system, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Safe area: prostor ispod kamere (notch) i donje trake telefona.
+   * env() radi uz viewport-fit=cover (index.html). --safe-area-inset-*
+   * je rezerva za Android WebView u kojem env() vraća 0, a Capacitor
+   * postavlja te varijable sam. Na desktopu je sve 0px. */
+  --fn-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --fn-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --fn-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --fn-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 }
 
 html,
@@ -57,6 +66,11 @@ body {
   color: var(--fn-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Sadržaj ne ide ispod kamere, zaobljenih ivica ni donje trake. */
+body {
+  padding: var(--fn-safe-top) var(--fn-safe-right) var(--fn-safe-bottom) var(--fn-safe-left);
 }
 
 button,

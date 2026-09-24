@@ -2132,7 +2132,13 @@ test('38 - the pairing screen shows the answer without a second click', async ({
     }),
   );
 
-  await page.getByLabel('Pairing code').fill('000000');
+  // Sest polja, po jedno za cifru: kucanje samo prelazi na sljedece.
+  await page.getByLabel('Digit 1 of 6').click();
+  await page.keyboard.type('000000');
+
+  await expect(page.getByLabel('Digit 6 of 6')).toHaveValue('0');
+  await expect(page.getByLabel('Digit 6 of 6')).toBeFocused();
+
   await pairButton.click();
 
   await expect(
@@ -2354,4 +2360,134 @@ test('42 - a Pro account gets the Pro panel on its very first sign-in', async ({
 
   await page.goto('/pro/monitoring');
   await expect(page).toHaveURL(/\/pro$/);
+});
+
+// Mobilni brief, sekcija 6. Donja navigacija je samo za telefon: na
+// desktop sirini je nema, pa ostali testovi (1280px) vide isti ekran
+// kao prije.
+test('43 - on a phone the main screens are in a bottom bar, on a desktop they are not', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  // Prijava nema navigaciju — nalog jos nije spreman.
+  await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeHidden();
+
+  // Sadrzaj ne ide ispod kamere ni donje trake telefona.
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    'content',
+    /viewport-fit=cover/,
+  );
+
+  await login(page);
+
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+
+  await expect(nav).toBeVisible();
+
+  for (const name of ['Home', 'Devices', 'Protection', 'Schedules', 'Notifications']) {
+    const link = nav.getByRole('link', { name });
+
+    await expect(link).toBeVisible();
+
+    // Dodir palcem: najmanje 44px u visinu.
+    const box = await link.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await nav.getByRole('link', { name: 'Devices' }).click();
+  await expect(page).toHaveURL(/\/devices$/);
+
+  await nav.getByRole('link', { name: 'Notifications' }).click();
+  await expect(page).toHaveURL(/\/notifications$/);
+
+  // Push poruka jos nema — i to pise na ekranu, ne precutkuje se.
+  await expect(page.getByTestId('no-push-note')).toContainText('push');
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+
+  expect(overflow).toBe(false);
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(nav).toBeHidden();
+});
+
+// Hitni izuzetak se radi pod pritiskom, pa je na pocetnoj — ali samo kad
+// je nesto zaista pauzirano po rasporedu.
+test('44 - a device paused by its schedule can be let online from the home screen', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // Raspored oko trenutnog vremena, svi dani — kao u testu 26.
+  const now = new Date();
+  const start = new Date(now.getTime() - 60 * 60 * 1000);
+  const end = new Date(now.getTime() + 60 * 60 * 1000);
+  const pad = (value: number) => String(value).padStart(2, '0');
+
+  const hours = {
+    startHour: pad(start.getHours()),
+    startMinute: pad(start.getMinutes()),
+    endHour: pad(end.getHours()),
+    endMinute: pad(end.getMinutes()),
+  };
+
+  await page.request.patch(`/api/v1/app/network-devices/${seeded.deviceIds.iphone}`, {
+    headers,
+    data: {
+      schedule: {
+        enabled: true,
+        mode: 'sameEveryDay',
+        ...hours,
+        days: WEEK_ORDER.map((label) => ({ label, selected: true, ...hours })),
+      },
+    },
+  });
+
+  await page.goto('/dashboard');
+
+  const row = page
+    .getByTestId('override-row')
+    .filter({ hasText: "Amar's iPhone" });
+
+  await expect(row).toContainText('Paused now');
+
+  await row.getByRole('button', { name: '30 min' }).click();
+
+  await expect(row).toContainText('Allowed for 30 more min');
+
+  // Isti upis kao iz detalja uredjaja — stoji na serveru.
+  await expect
+    .poll(async () => {
+      const devices = await (
+        await page.request.get('/api/v1/app/network-devices', { headers })
+      ).json();
+
+      return devices.find((d: { id: string }) => d.id === seeded.deviceIds.iphone)
+        .override_until;
+    })
+    .not.toBeNull();
+
+  await row.getByRole('button', { name: 'End override' }).click();
+
+  await expect(row).toContainText('Paused now');
+});
+
+// Sekcija 2 briefa: ekran ne izmislja stanje uredjaja. Ranije je pocetna
+// za nalog BEZ ijednog uredjaja pisala "Fornect Home · online · v0.1.0 ·
+// vidjen upravo sada".
+test('45 - the home screen does not invent a device the account does not have', async ({
+  page,
+}) => {
+  await login(page);
+
+  await expect(page.getByRole('heading', { name: 'No device paired' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Pair device' })).toBeVisible();
+
+  await expect(page.getByText('v0.1.0')).toHaveCount(0);
+  await expect(page.getByText('Just now')).toHaveCount(0);
 });

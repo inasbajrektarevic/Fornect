@@ -1,9 +1,13 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
-import { Router, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
+
+import { AuthService } from './core/services/auth';
+import { HubService } from './core/services/hub';
+import { BottomNav } from './shared/components/bottom-nav/bottom-nav';
 
 /**
  * Ekrani sa kojih hardversko dugme nazad zatvara aplikaciju.
@@ -14,8 +18,28 @@ import { App as CapacitorApp } from '@capacitor/app';
  */
 const ROOT_ROUTES = ['/login', '/dashboard', '/pro'];
 
+/**
+ * Ekrani Home panela na kojima stoji donja navigacija (samo na
+ * telefonu — vidi BottomNav). Nema je na prijavi, registraciji i
+ * uparivanju (nalog još nije spreman), ni u Pro panelu, koji ima svoj
+ * raspored ekrana.
+ */
+const BOTTOM_NAV_ROUTES = [
+  '/dashboard',
+  '/devices',
+  '/protection',
+  '/schedules',
+  '/notifications',
+  '/settings',
+  '/new-devices',
+  '/help',
+  '/capacity',
+  '/fleet',
+  '/portal-branding',
+];
+
 @Component({
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, BottomNav],
   selector: 'app-root',
   styleUrl: './app.scss',
   templateUrl: './app.html',
@@ -25,9 +49,29 @@ export class App {
 
   private readonly location = inject(Location);
   private readonly router = inject(Router);
+  private readonly authService = inject(AuthService);
+  private readonly hubService = inject(HubService);
+
+  private readonly path = signal('');
+
+  protected readonly showBottomNav = computed(() => {
+    const path = this.path();
+
+    return (
+      this.authService.isAuthenticated() &&
+      !this.hubService.isPro() &&
+      BOTTOM_NAV_ROUTES.some((root) => path === root || path.startsWith(`${root}/`))
+    );
+  });
 
   constructor() {
     this.registerBackButton();
+
+    this.router.events.subscribe((event) => {
+      if (event instanceof NavigationEnd) {
+        this.path.set(event.urlAfterRedirects.split('?')[0]);
+      }
+    });
   }
 
   /**

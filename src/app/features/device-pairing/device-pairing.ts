@@ -1,5 +1,11 @@
-﻿import { ChangeDetectorRef, Component, inject } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+﻿import {
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  inject,
+  signal,
+  viewChildren
+} from '@angular/core';
 import {
   Router,
   RouterLink
@@ -24,7 +30,6 @@ type PairingMethod = 'qr' | 'serial';
 @Component({
   selector: 'app-device-pairing',
   imports: [
-    FormsModule,
     RouterLink,
     TranslatePipe,
     LanguageSwitch
@@ -60,7 +65,21 @@ export class DevicePairing {
 
   method: PairingMethod = 'qr';
 
-  serialNumber = '';
+  /**
+   * Kod za uparivanje, po cifri. Šest odvojenih polja umjesto jednog:
+   * na telefonu se kod prepisuje sa ekrana uređaja, a velike odvojene
+   * cifre se lakše provjere, i fokus sam prelazi na sljedeću.
+   */
+  readonly digitIndexes = [0, 1, 2, 3, 4, 5];
+
+  readonly digits = signal<string[]>(['', '', '', '', '', '']);
+
+  private readonly digitInputs =
+    viewChildren<ElementRef<HTMLInputElement>>('digit');
+
+  get serialNumber(): string {
+    return this.digits().join('');
+  }
   errorMessageKey = '';
   paired = false;
   submitting = false;
@@ -125,6 +144,91 @@ export class DevicePairing {
       this.submitting = false;
       this.changeDetector.markForCheck();
     }
+  }
+
+  onDigitInput(index: number, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const typed = input.value.replace(/\D/g, '');
+
+    // Više cifara odjednom: lijepljenje, automatsko popunjavanje koda
+    // sa tastature telefona, ili upis u polje koje je već imalo cifru.
+    if (typed.length > 1) {
+      this.fillFrom(index, typed);
+      return;
+    }
+
+    const next = [...this.digits()];
+    next[index] = typed;
+    this.digits.set(next);
+
+    // Slovo ili znak se ne prima; polje ostaje prazno.
+    input.value = typed;
+
+    if (typed && index < 5) {
+      this.focusDigit(index + 1);
+    }
+  }
+
+  onDigitKeydown(index: number, event: KeyboardEvent): void {
+    if (event.key === 'Backspace' && !this.digits()[index] && index > 0) {
+      event.preventDefault();
+
+      const next = [...this.digits()];
+      next[index - 1] = '';
+      this.digits.set(next);
+
+      this.focusDigit(index - 1);
+    } else if (event.key === 'ArrowLeft' && index > 0) {
+      event.preventDefault();
+      this.focusDigit(index - 1);
+    } else if (event.key === 'ArrowRight' && index < 5) {
+      event.preventDefault();
+      this.focusDigit(index + 1);
+    }
+  }
+
+  onCodePaste(index: number, event: ClipboardEvent): void {
+    const pasted = (event.clipboardData?.getData('text') ?? '').replace(/\D/g, '');
+
+    if (!pasted) {
+      return;
+    }
+
+    event.preventDefault();
+
+    // Cijeli kod se uvijek upisuje od prvog polja.
+    this.fillFrom(pasted.length >= 6 ? 0 : index, pasted);
+  }
+
+  private fillFrom(start: number, text: string): void {
+    const next = [...this.digits()];
+    let position = start;
+
+    for (const digit of text) {
+      if (position > 5) {
+        break;
+      }
+
+      next[position] = digit;
+      position++;
+    }
+
+    this.digits.set(next);
+
+    // [value] se ne mijenja ako je signal isti kao prije, pa se polja
+    // usklađuju i ovdje, direktno.
+    this.digitInputs().forEach((ref, i) => {
+      ref.nativeElement.value = next[i];
+    });
+
+    this.focusDigit(Math.min(position, 5));
+  }
+
+  private focusDigit(index: number): void {
+    const input = this.digitInputs()[index]?.nativeElement;
+
+    input?.focus();
+    input?.select();
   }
 
   continueToDashboard(): void {

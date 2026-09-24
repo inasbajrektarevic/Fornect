@@ -1,0 +1,46 @@
+@if (paused().length > 0 || allowed().length > 0) {
+  <section class="quick-override" data-testid="quick-override">
+    <h2>{{ 'override.title' | translate }}</h2>
+
+    @for (device of paused(); track device.id) {
+      <div class="override-row" data-testid="override-row">
+        <div class="override-device">
+          <strong>{{ device.name }}</strong>
+          <span class="state paused">{{ 'override.pausedNow' | translate }}</span>
+        </div>
+
+        <div class="override-actions">
+          <button type="button" (click)="allow(device, 15)">15 min</button>
+          <button type="button" (click)="allow(device, 30)">30 min</button>
+          <button type="button" (click)="allow(device, 60)">
+            {{ 'deviceDetails.oneHour' | translate }}
+          </button>
+          <button type="button" (click)="allowUntilEndOfDay(device)">
+            {{ 'deviceDetails.untilEndOfDay' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @for (device of allowed(); track device.id) {
+      <div class="override-row" data-testid="override-row">
+        <div class="override-device">
+          <strong>{{ device.name }}</strong>
+          <span class="state allowed">
+            @if (untilEndOfDay(device)) {
+              {{ 'override.allowedToday' | translate }}
+            } @else {
+              {{ 'override.allowedFor' | translate: { minutes: minutesLeft(device) } }}
+            }
+          </span>
+        </div>
+
+        <div class="override-actions">
+          <button type="button" class="end" (click)="end(device)">
+            {{ 'deviceDetails.endOverride' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+}

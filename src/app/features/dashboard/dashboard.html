@@ -48,10 +48,12 @@
         </svg>
       </a>
 
-      <div class="status">
-        <span class="status-dot"></span>
-        {{ 'common.online' | translate }}
-      </div>
+      @if (fornectDevice.paired) {
+        <div class="status" [class.offline]="!fornectDevice.online">
+          <span class="status-dot"></span>
+          {{ (fornectDevice.online ? 'common.online' : 'common.offline') | translate }}
+        </div>
+      }
 
       <button
         type="button"
@@ -64,6 +66,8 @@
 
   <main class="dashboard-content">
     <app-connection-banner />
+
+    <app-quick-override />
 
     @if (unclassifiedCount > 0) {
       <a class="new-devices-banner" routerLink="/new-devices">
@@ -139,6 +143,25 @@
       </div>
     </section>
 
+    @if (!fornectDevice.paired) {
+      <section class="device-status-card">
+        <div>
+          <p class="eyebrow">
+            {{ 'dashboard.fornectDevice' | translate }}
+          </p>
+
+          <h3>{{ 'dashboard.noDevice' | translate }}</h3>
+
+          <p class="device-status-text">
+            {{ 'dashboard.noDeviceText' | translate }}
+          </p>
+        </div>
+
+        <a class="pair-link" routerLink="/pair-device">
+          {{ 'dashboard.pairDevice' | translate }}
+        </a>
+      </section>
+    } @else {
     <section class="device-status-card">
       <div>
         <p class="eyebrow">
@@ -173,22 +196,13 @@
             {{ 'dashboard.software' | translate }}
           </span>
 
-          <strong>
-            v{{ fornectDevice.softwareVersion }}
-          </strong>
-        </div>
-
-        <div class="device-detail">
-          <span>
-            {{ 'dashboard.lastSeen' | translate }}
-          </span>
-
-          <strong>
-            {{ 'dashboard.justNow' | translate }}
+          <strong class="not-reported">
+            {{ 'dashboard.versionNotReported' | translate }}
           </strong>
         </div>
       </div>
     </section>
+    }
 
     <section class="quick-actions">
       <h3>
