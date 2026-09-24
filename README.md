@@ -99,7 +99,7 @@ npm run portal         # http://localhost:4300, glumi uređaj
 
 ## Testovi
 
-56 e2e testa: 40 za panel (`tests/fornect.spec.ts`) i 16 za portal
+58 e2e testa: 42 za panel (`tests/fornect.spec.ts`) i 16 za portal
 (`tests/portal.spec.ts`).
 
 **Backend mora biti pokrenut** (korak 1 gore). Panel i portal Playwright

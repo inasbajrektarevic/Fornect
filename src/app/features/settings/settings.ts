@@ -47,12 +47,6 @@ export class Settings {
   ];
   private readonly languageService = inject(LanguageService);
 
-  readonly hubModes: HubMode[] = [
-    'home',
-    'hospitality',
-    'agency'
-  ];
-
   readonly user = this.authService.currentUser();
 
   preferences: AccountPreferences =
@@ -107,10 +101,6 @@ export class Settings {
       default:
         return 'pro.modeHome';
     }
-  }
-
-  changeHubMode(mode: HubMode): void {
-    this.hubService.setMode(mode);
   }
 
   changeLanguage(language: AppLanguage): void {

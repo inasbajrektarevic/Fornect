@@ -2271,3 +2271,87 @@ test('40 - a device cannot be put under inspection without consent', async ({ pa
 
   expect(verified.ok()).toBe(true);
 });
+
+// Home ili Pro odlucuje UREDJAJ, ne korisnik (specifikacija: aplikacija
+// pri prijavi cita tip uredjaja i mod sa backenda). Ranije je u
+// Postavkama stajao prekidac kojim je svako mogao sebe prebaciti u Pro,
+// a izbor se pamtio lokalno.
+test('41 - an account without a Pro device cannot open the Pro panel', async ({ page }) => {
+  const seeded = await seedAccount(page);
+
+  // Zapis koji je ostavljao stari prekidac moda: lokalno "Pro".
+  await page.evaluate((accountId) => {
+    localStorage.setItem(
+      `fornect-hub-${accountId}`,
+      JSON.stringify({
+        name: 'Fornect Pro',
+        serialNumber: 'FH-POC-001',
+        kind: 'pro',
+        mode: 'hospitality',
+        softwareVersion: '0.1.0',
+        online: true,
+        capacity: 100,
+        connectedUsers: 47,
+      }),
+    );
+  }, seeded.accountId);
+
+  // Server kaze: ovaj nalog nema uparen hub, dakle Home.
+  await page.goto('/pro');
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  await page.goto('/pro/guests');
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  // U Postavkama se mod samo vidi, ne bira.
+  await page.goto('/settings');
+  await expect(page.getByTestId('device-mode')).toHaveText('Home');
+  await expect(page.getByRole('button', { name: 'Hospitality' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Agency' })).toHaveCount(0);
+});
+
+// Pro nalog pri PRVOJ prijavi na novom pregledacu (nista lokalno
+// zapamceno) mora odmah dobiti Pro panel. Ranije je dobijao Home: panel
+// je preusmjeravao prije nego sto server javi tip huba.
+//
+// Odgovor GET /app/hub se ovdje glumi (page.route): pravi Pro hub bi
+// trosio jedno od deset uparivanja po satu (vidi registerHub), a test
+// provjerava odluku panela, ne server.
+test('42 - a Pro account gets the Pro panel on its very first sign-in', async ({ page }) => {
+  const email = uniqueEmail('pro-first');
+
+  await registerAccount(page, email, 'Hotel Owner');
+
+  await page.route('**/api/v1/app/hub', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'FP-TEST-0042',
+        name: 'Hotel Fornect',
+        kind: 'pro',
+        mode: 'hospitality',
+        capacity: 100,
+        online: true,
+        connected_devices: 12,
+      }),
+    }),
+  );
+
+  await page.goto('/login');
+  await page.getByLabel('Email address').fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  await expect(page).toHaveURL(/\/pro$/);
+
+  // Home dashboard vraca na Pro; Hospitality vid se otvara, Agency ne.
+  await page.goto('/dashboard');
+  await expect(page).toHaveURL(/\/pro$/);
+
+  await page.goto('/pro/guests');
+  await expect(page).toHaveURL(/\/pro\/guests$/);
+
+  await page.goto('/pro/monitoring');
+  await expect(page).toHaveURL(/\/pro$/);
+});

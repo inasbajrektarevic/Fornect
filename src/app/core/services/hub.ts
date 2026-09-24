@@ -38,13 +38,20 @@ interface HubApiResponse {
 /**
  * Fornect uređaj (hub) na koji je nalog uparen.
  *
- * `hub` signal se popunjava odmah sinhrono iz localStorage-a (kao i
- * ranije, da guardovi koji ga sinhrono čitaju rade bez treptaja), a
- * zatim se u pozadini osvježava pravim podacima sa
- * GET /api/v1/app/hub kad god se pozove `syncWithCurrentAccount()`
- * (npr. odmah nakon logina). Ako nalog još nije uparen ni sa jednim
- * fizičkim hub-om (backend vrati 404), ostaje lokalna/mock vrijednost
- * — to je namjeran fallback dok ne postoji hub-pairing tok.
+ * Tip (Home/Pro) i mod (Hospitality/Agency) su svojstva UREĐAJA i
+ * dolaze sa servera (GET /api/v1/app/hub). Panel ih ne bira i korisnik
+ * ih ne mijenja — specifikacija: "aplikacija pri prijavi čita tip
+ * uređaja i mod sa backend-a i na osnovu toga renderuje odgovarajući
+ * set ekrana".
+ *
+ * `hub` signal se odmah puni iz localStorage-a, da ekrani imaju šta
+ * prikazati. Ali guardovi koji odlučuju Home ili Pro čekaju odgovor
+ * servera (`ensureLoaded()`): bez toga je Pro nalog na novom
+ * pregledaču ili telefonu dobijao Home panel, jer lokalnog zapisa još
+ * nema, a odgovor stigne tek poslije preusmjeravanja.
+ *
+ * Nalog bez uparenog huba (404) je Home: nema uređaja koji bi rekao
+ * drugačije.
  */
 @Injectable({
   providedIn: 'root',
@@ -71,33 +78,34 @@ export class HubService {
 
   readonly nearCapacity = computed(() => this.capacityPercent() >= 80);
 
+  /** Odgovor servera za trenutni nalog; `null` dok se ne zatraži. */
+  private loaded: Promise<void> | null = null;
+
+  /**
+   * Redni broj posljednjeg zahtjeva. Odgovor koji stigne kasnije od
+   * novijeg stanja (npr. 404 poslan prije nego što je korisnik upario
+   * hub) ne smije ga pregaziti.
+   */
+  private generation = 0;
+
   constructor() {
     if (this.authService.isAuthenticated()) {
-      void this.refreshFromApi();
+      this.loaded = this.refreshFromApi();
     }
   }
 
   /**
-   * `setMode` nema backend ekvivalent za običnog korisnika — kind/mode
-   * su svojstva fizičkog uređaja koja postavlja admin (X-Admin-Key),
-   * ne nešto što app korisnik mijenja preko JWT-a. Ostaje lokalni
-   * demo override, da Pro/Hospitality/Agency ekrani ostanu upotrebljivi
-   * bez potrebe za pravim hub-pairing tokom.
+   * Čeka da server javi tip i mod huba. Guardovi ovo zovu prije nego
+   * odluče Home ili Pro. Poslije prvog odgovora vraća se odmah.
    */
-  setMode(mode: HubMode): void {
-    const kind: HubKind = mode === 'home' ? 'home' : 'pro';
+  ensureLoaded(): Promise<void> {
+    if (!this.authService.isAuthenticated()) {
+      return Promise.resolve();
+    }
 
-    const hub: HubInfo = {
-      ...this.hub(),
-      kind,
-      mode,
-      name: kind === 'pro' ? 'Fornect Pro' : 'Fornect Home',
-      capacity: kind === 'pro' ? 100 : 20,
-      connectedUsers: kind === 'pro' ? 47 : 4,
-    };
+    this.loaded ??= this.refreshFromApi();
 
-    this.hub.set(hub);
-    this.save(hub);
+    return this.loaded;
   }
 
   /**
@@ -128,12 +136,17 @@ export class HubService {
     this.hub.set(hub);
     this.save(hub);
 
+    // Upravo upareni hub je najnovije stanje; zahtjev koji je možda još
+    // u letu (npr. 404 od prije uparivanja) se odbacuje.
+    this.generation++;
+    this.loaded = Promise.resolve();
+
     return hub;
   }
 
   syncWithCurrentAccount(): void {
     this.hub.set(this.load());
-    void this.refreshFromApi();
+    this.loaded = this.refreshFromApi();
   }
 
   getLoad(period: LoadPeriod): LoadPoint[] {
@@ -171,10 +184,16 @@ export class HubService {
   }
 
   private async refreshFromApi(): Promise<void> {
+    const generation = ++this.generation;
+
     try {
       const response = await firstValueFrom(
         this.http.get<HubApiResponse>(`${API_BASE_URL}/app/hub`),
       );
+
+      if (generation !== this.generation) {
+        return;
+      }
 
       const hub: HubInfo = {
         ...this.hub(),
@@ -189,9 +208,22 @@ export class HubService {
 
       this.hub.set(hub);
       this.save(hub);
-    } catch {
-      // Nalog još nije uparen ni sa jednim fizičkim hub-om (404), ili
-      // backend nije dostupan — ostaje lokalna/mock vrijednost.
+    } catch (error) {
+      if (generation !== this.generation) {
+        return;
+      }
+
+      // 404: nalog nema uparen hub, pa je Home. Lokalni zapis se
+      // briše, jer je mogao ostati Pro iz ranijeg POC prekidača moda u
+      // Postavkama — i taj bi nalog inače i dalje vidio Pro panel.
+      if ((error as { status?: number } | null)?.status === 404) {
+        const accountId = this.authService.currentUser()?.accountId ?? 'anonymous';
+
+        localStorage.removeItem(this.storageKey(accountId));
+        this.hub.set(this.load());
+      }
+
+      // Server nedostupan: ostaje ono što je zapamćeno od prošlog puta.
     }
   }
 

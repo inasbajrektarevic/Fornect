@@ -205,8 +205,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.deviceMode': 'Softverski mod uređaja',
     'settings.deviceModeDescription':
       'Mod određuje koji se panel prikazuje: Home ili Pro (Hospitality ili Agency).',
-    'settings.deviceModePocNote':
-      'POC mod — u produkciji aplikacija čita tip uređaja i mod sa backend-a pri prijavi, pa se ovdje ne bi ručno mijenjao.',
+    'settings.deviceModeFromDevice':
+      'Mod se postavlja na samom uređaju i ne mijenja se ovdje. Nalog bez uparenog uređaja je Home.',
 
     'connection.label': 'Veza',
     'connection.offlineTitle': 'Fornect uređaj nije dostupan',
@@ -1364,8 +1364,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.deviceMode': 'Device software mode',
     'settings.deviceModeDescription':
       'The mode determines which panel is shown: Home or Pro (Hospitality or Agency).',
-    'settings.deviceModePocNote':
-      'POC mode - in production the app reads the device type and mode from the backend at sign-in, so this would not be changed by hand.',
+    'settings.deviceModeFromDevice':
+      'The mode is set on the device itself and is not changed here. An account without a paired device is Home.',
 
     'connection.label': 'Connection',
     'connection.offlineTitle': 'Fornect device is unreachable',

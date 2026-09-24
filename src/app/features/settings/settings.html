@@ -174,20 +174,17 @@
         </p>
       </div>
 
+      <!-- Samo prikaz. Mod je svojstvo uređaja i dolazi sa servera;
+           ranije je ovdje bio prekidač kojim je svako mogao sebe
+           prebaciti u Pro panel. -->
       <div class="mode-options">
-        @for (mode of hubModes; track mode) {
-          <button
-            type="button"
-            class="mode-option"
-            [class.active]="hubMode === mode"
-            (click)="changeHubMode(mode)">
-            {{ hubModeLabelKey(mode) | translate }}
-          </button>
-        }
+        <span class="mode-option active" data-testid="device-mode">
+          {{ hubModeLabelKey(hubMode) | translate }}
+        </span>
       </div>
 
       <p class="poc-note">
-        {{ 'settings.deviceModePocNote' | translate }}
+        {{ 'settings.deviceModeFromDevice' | translate }}
       </p>
     </section>
 
