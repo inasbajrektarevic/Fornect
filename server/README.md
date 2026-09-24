@@ -68,8 +68,8 @@ najlakše kao one-off komanda unutar istog image-a, npr.
 | Metoda | Ruta | Opis |
 | --- | --- | --- |
 | GET | `/api/v1/app/network-devices` | Svi uređaji trenutnog naloga. |
-| POST | `/api/v1/app/network-devices` | Dodaje novi (`mac_address`, `name` obavezni). |
-| PATCH | `/api/v1/app/network-devices/:id` | Izmjena profila/imena/restrictions/schedule/pairing_state... |
+| POST | `/api/v1/app/network-devices` | Dodaje novi (`mac_address`, `name` obavezni). `pairing_state` samo `unpaired` ili `guest`. |
+| PATCH | `/api/v1/app/network-devices/:id` | Izmjena profila/imena/restrictions/schedule. `pairing_state` samo `unpaired`→`guest` i, uz važeći pristanak, `failed`/`paired`→`pairing`. U `paired` vodi isključivo pristanak + `/consent/verify`. Puna zaštita (`protection_level: full`) samo za `paired` uređaj. |
 | DELETE | `/api/v1/app/network-devices/:id` | Briše uređaj. |
 | GET | `/api/v1/app/hub` | Fornect hub uparen sa nalogom (`kind`, `mode`, `capacity`, `online`, `connected_devices`). |
 | POST | `/api/v1/app/hub/claim` | Uparivanje huba kodom. Ograničeno po IP-u (`HUB_CLAIM_MAX_PER_HOUR`). |

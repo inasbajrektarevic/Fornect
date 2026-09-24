@@ -234,8 +234,14 @@ export class Protection {
    * ponavlja se samo tehnicki dio.
    */
   retryInstallation(): void {
+    // Uredjaj koji je bio 'paired' ovim izlazi iz presretanja, pa ni
+    // nivo vise nije puni. Server radi isto; ovdje se samo drzi
+    // lokalna kopija u skladu sa njim.
     this.deviceService.updateDevice(this.deviceId, {
-      pairingState: 'pairing'
+      pairingState: 'pairing',
+      ...(this.device.protectionLevel === 'full'
+        ? { protectionLevel: 'standard' as const }
+        : {})
     });
 
     this.refreshDevice();

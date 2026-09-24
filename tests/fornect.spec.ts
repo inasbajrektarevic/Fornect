@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, APIResponse, Page } from '@playwright/test';
 
 // ---------------------------------------------------------------
 // Backend je sad stvaran (Fastify + PostgreSQL), ne localStorage
@@ -269,6 +269,11 @@ async function seedAccount(
 
   if (options.withDevices !== false) {
     for (const spec of DEMO_DEVICES) {
+      // Uparen uredjaj (iPhone) se NE pravi kao 'paired' direktno: server
+      // to vise ne prima, jer bi bio pod presretanjem bez pristanka.
+      // Pravi se kao nov, pa prolazi pravi tok pristanka ispod.
+      const paired = spec.pairingState === 'paired';
+
       const createResponse = await page.request.post('/api/v1/app/network-devices', {
         headers: { Authorization: `Bearer ${token}` },
         data: {
@@ -276,12 +281,14 @@ async function seedAccount(
           name: spec.name,
           type: spec.type,
           profile: spec.profile,
-          protection_level: spec.protectionLevel,
-          pairing_state: spec.pairingState,
+          protection_level: paired ? 'standard' : spec.protectionLevel,
+          pairing_state: paired ? undefined : spec.pairingState,
           use_full_protection: spec.useFullProtection,
           schedule: spec.schedule,
         },
       });
+
+      expect(createResponse.status(), `demo uredjaj ${spec.name}`).toBe(201);
 
       const created = await createResponse.json();
       deviceIds[spec.key] = created.id;
@@ -304,6 +311,10 @@ async function seedAccount(
           headers: { Authorization: `Bearer ${token}` },
           data: { online: false },
         });
+      }
+
+      if (paired) {
+        await consentViaApi(page, { Authorization: `Bearer ${token}` }, created.id);
       }
     }
   }
@@ -330,6 +341,31 @@ async function seedAccount(
   );
 
   return { email, accountId: account.id, deviceIds };
+}
+
+/**
+ * Pristanak i potvrda instalacije preko API-ja — isti put kojim ide
+ * panel (forma pristanka, pa "Profil je instaliran"), samo bez klikanja.
+ * Jedini put do 'paired', i za testove.
+ */
+async function consentViaApi(
+  page: Page,
+  headers: Record<string, string>,
+  deviceId: string,
+): Promise<void> {
+  const granted = await page.request.post(`/api/v1/app/network-devices/${deviceId}/consent`, {
+    headers,
+    data: { guardian_name: 'Test Guardian', guardian_relation: 'parent', subject_is_minor: false },
+  });
+
+  expect(granted.status(), 'pristanak').toBe(201);
+
+  const verified = await page.request.post(
+    `/api/v1/app/network-devices/${deviceId}/consent/verify`,
+    { headers, data: { success: true, manual: true } },
+  );
+
+  expect(verified.ok(), 'potvrda instalacije').toBe(true);
 }
 
 /** Ekvivalent staroj login(page) helper funkciji — ulaze već
@@ -1375,21 +1411,33 @@ test('29 - portal text is edited in the panel and the hub pulls exactly that', a
 //
 // Pomocna funkcija, jer sva tri testa ispod trebaju nalog sa uparenim
 // hub-om i jednim uredjajem na mrezi.
-async function seedHub(page: Page, email: string, token: string) {
+async function seedHub(
+  page: Page,
+  email: string,
+  token: string,
+  options: { phoneConsented?: boolean } = {},
+) {
   const headers = { Authorization: `Bearer ${token}` };
 
   const hub = await registerHub(page, headers, { name: 'Fleet hub', capacity: 10 });
 
   // Jedan uparen uredjaj, da se vidi da OTA izmjena ne obrise MAC-ove.
-  await page.request.post('/api/v1/app/network-devices', {
+  // Uparen kroz pristanak — direktan 'paired' server odbija.
+  const phone = await page.request.post('/api/v1/app/network-devices', {
     headers,
     data: {
       mac_address: 'AA:BB:CC:00:11:22',
       name: 'Telefon',
       type: 'phone',
-      pairing_state: 'paired',
     },
   });
+
+  expect(phone.status(), 'uredjaj Telefon').toBe(201);
+
+  // Test 33 trazi Telefon BEZ pristanka: pristanak mu tamo daje hub.
+  if (options.phoneConsented !== false) {
+    await consentViaApi(page, headers, (await phone.json()).id);
+  }
 
   return { hub, headers, hubHeaders: { Authorization: `Bearer ${hub.token}` } };
 }
@@ -1584,7 +1632,12 @@ test('32 - the fleet screen says what the device does not report', async ({ page
 test('33 - the owner is told about a new device and a failed consent', async ({ page }) => {
   const seeded = await login(page);
   const { token } = await apiLogin(page, seeded.email);
-  const { hub, headers, hubHeaders } = await seedHub(page, seeded.email, token);
+
+  // Telefon bez pristanka: pristanak mu ovdje daje hub (portal), pa
+  // instalacija padne. Sa vec vazecim pristankom hub bi dobio 409.
+  const { hub, headers, hubHeaders } = await seedHub(page, seeded.email, token, {
+    phoneConsented: false,
+  });
 
   const mac = '02:00:00:00:33:01';
 
@@ -2153,4 +2206,68 @@ test('39 - choosing full protection at setup leads to consent, it does not switc
 
   expect(forced.status()).toBe(400);
   expect((await forced.json()).code).toBe('full-protection-needs-profile');
+});
+
+// 'paired' je stanje po kojem hub dobija MAC adresu za presretanje
+// (consented_macs). Do njega vodi SAMO pristanak + potvrda instalacije.
+// Ranije je CRUD uredjaja primao 'paired' direktno: jedan PATCH i
+// uredjaj je bio pod presretanjem bez ijednog zapisa o pristanku.
+test('40 - a device cannot be put under inspection without consent', async ({ page }) => {
+  const seeded = await login(page);
+  const { token } = await apiLogin(page, seeded.email);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const device = (id: string) => `/api/v1/app/network-devices/${id}`;
+
+  const refused = async (response: APIResponse) => {
+    expect(response.status()).toBe(400);
+    expect((await response.json()).code).toBe('pairing-state-needs-consent');
+  };
+
+  // Nov uredjaj ne moze nastati kao uparen.
+  await refused(
+    await page.request.post('/api/v1/app/network-devices', {
+      headers,
+      data: { mac_address: '02:00:00:00:40:01', name: 'Sneaky', pairing_state: 'paired' },
+    }),
+  );
+
+  // Postojeci, bez pristanka: ni 'paired', ni 'pairing', ni 'failed'.
+  const tv = seeded.deviceIds.tv;
+
+  for (const state of ['paired', 'pairing', 'failed']) {
+    await refused(await page.request.patch(device(tv), { headers, data: { pairing_state: state } }));
+  }
+
+  // Svrstavanje novog uredjaja u goste i dalje radi.
+  const guest = await page.request.patch(device(tv), {
+    headers,
+    data: { pairing_state: 'guest' },
+  });
+
+  expect(guest.status()).toBe(200);
+
+  // Uparen iPhone ima pristanak: ponovna instalacija profila je
+  // dozvoljena, i uredjaj time silazi sa pune zastite...
+  const iphone = seeded.deviceIds.iphone;
+
+  const reinstall = await page.request.patch(device(iphone), {
+    headers,
+    data: { pairing_state: 'pairing' },
+  });
+
+  expect(reinstall.status()).toBe(200);
+  expect((await reinstall.json()).protection_level).toBe('standard');
+
+  // ...a nazad na 'paired' ga vraca samo potvrda instalacije, ne PATCH.
+  await refused(
+    await page.request.patch(device(iphone), { headers, data: { pairing_state: 'paired' } }),
+  );
+
+  const verified = await page.request.post(`${device(iphone)}/consent/verify`, {
+    headers,
+    data: { success: true, manual: true },
+  });
+
+  expect(verified.ok()).toBe(true);
 });

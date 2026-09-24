@@ -9,6 +9,7 @@ import type { PoolClient } from 'pg';
 
 import { pool } from '../db';
 import { applyAutoGuestPolicy } from '../services/auto-guest';
+import { loadActiveConsent } from '../services/consent-actions';
 import { syncDeviceConfig } from '../services/device-config-sync';
 import { normaliseMac } from '../services/mac';
 import {
@@ -27,7 +28,7 @@ interface NetworkDeviceRow {
   type: 'phone' | 'tv' | 'console' | 'unknown';
   profile: 'Child' | 'Teen' | 'Adult' | 'Admin' | null;
   protection_level: 'standard' | 'full' | 'needs-setup';
-  pairing_state: 'unpaired' | 'pairing' | 'paired' | 'failed';
+  pairing_state: 'unpaired' | 'guest' | 'pairing' | 'paired' | 'failed';
   use_full_protection: boolean;
   online: boolean;
   blocked_ads_today: number;
@@ -107,6 +108,28 @@ const FULL_NEEDS_PROFILE = {
   code: 'full-protection-needs-profile',
 };
 
+// pairing_state = 'paired' je ono po cemu server hubu javlja koje MAC
+// adrese smije presretati (device-config-sync.ts -> consented_macs).
+// Zato u 'paired' vodi SAMO tok pristanka: pristanak -> provjera
+// certifikata (consent-actions.ts). Ranije je ovaj CRUD primao
+// pairing_state bez ogranicenja, pa je jedan POST ili PATCH sa
+// 'paired' stavljao uredjaj pod presretanje bez ijednog zapisa o
+// pristanku. Ekrani panela to nisu radili, ali API jeste dozvoljavao.
+//
+// Panel smije samo ovo:
+//   - novi uredjaj: 'unpaired' (podrazumijevano) ili 'guest';
+//   - 'unpaired' -> 'guest': svrstavanje u goste (red "Novi uredjaji");
+//   - 'failed' ili 'paired' -> 'pairing': ponovna instalacija profila,
+//     i to samo dok pristanak vazi. Pristanak se tada ne trazi ponovo.
+// Sve ostalo (paired, failed, unpaired, i guest iz drugih stanja) radi
+// server kroz pristanak, provjeru, opoziv ili event sa huba.
+const PAIRING_STATE_SERVER_ONLY = {
+  error: 'Ovo stanje uparivanja postavlja samo tok pristanka.',
+  code: 'pairing-state-needs-consent',
+};
+
+const CREATABLE_PAIRING_STATES = new Set(['unpaired', 'guest']);
+
 export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/', async (request, reply) => {
     const client = await pool.connect();
@@ -161,6 +184,10 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
 
     if (!body.mac_address || !body.name) {
       return reply.code(400).send({ error: 'mac_address i name su obavezni.' });
+    }
+
+    if (body.pairing_state !== undefined && !CREATABLE_PAIRING_STATES.has(body.pairing_state)) {
+      return reply.code(400).send(PAIRING_STATE_SERVER_ONLY);
     }
 
     if (body.protection_level === 'full' && body.pairing_state !== 'paired') {
@@ -274,6 +301,30 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       if (!before) {
         await client.query('ROLLBACK');
         return reply.code(404).send({ error: 'Uređaj nije pronađen.' });
+      }
+
+      const nextPairing = body.pairing_state;
+
+      if (nextPairing !== undefined && nextPairing !== before.pairing_state) {
+        const allowed =
+          (nextPairing === 'guest' && before.pairing_state === 'unpaired') ||
+          (nextPairing === 'pairing' &&
+            (before.pairing_state === 'failed' || before.pairing_state === 'paired') &&
+            (await loadActiveConsent(client, before.id)) !== undefined);
+
+        if (!allowed) {
+          await client.query('ROLLBACK');
+          return reply.code(400).send(PAIRING_STATE_SERVER_ONLY);
+        }
+
+        // Ponovna instalacija sa 'paired': uredjaj izlazi iz
+        // consented_macs, pa ni nivo vise nije puni. Isto radi
+        // consent-actions.ts kad uredjaj napusti 'paired'.
+        if (before.pairing_state === 'paired' && body.protection_level === undefined) {
+          fields.push(
+            `protection_level = CASE WHEN protection_level = 'full' THEN 'standard' ELSE protection_level END`,
+          );
+        }
       }
 
       values.push(request.params.id, request.accountId);
