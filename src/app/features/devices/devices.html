@@ -66,17 +66,18 @@
             {{
               'devices.limitReachedDescription'
                 | translate:{
-                    limit: deviceLimit
+                    limit: deviceLimit,
+                    count: overCapacityCount
                   }
             }}
           </p>
         </div>
 
         <a
-          routerLink="/help"
+          routerLink="/capacity"
           class="device-limit-action">
           {{
-            'devices.contactSupport'
+            'devices.limitReachedAction'
               | translate
           }}
         </a>

@@ -36,10 +36,24 @@ export default defineConfig({
     }
   ],
 
-  webServer: {
-    command: 'npx ng serve --port 4200',
-    url: 'http://localhost:4200',
-    reuseExistingServer: true,
-    timeout: 120000
-  }
+  // Dva servera: panel na 4200 i captive portal na 4300.
+  //
+  // Portal ne zna za Angular — on je statički paket koji na terenu
+  // servira sam Fornect uređaj. Ovdje ga servira portal/dev-server.js,
+  // koji glumi fornectd (vidi komentar u tom fajlu za spisak onoga što
+  // je u njemu lažno).
+  webServer: [
+    {
+      command: 'npx ng serve --port 4200',
+      url: 'http://localhost:4200',
+      reuseExistingServer: true,
+      timeout: 120000
+    },
+    {
+      command: 'node portal/dev-server.js',
+      url: 'http://localhost:4300/config.json',
+      reuseExistingServer: true,
+      timeout: 30000
+    }
+  ]
 });

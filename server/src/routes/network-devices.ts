@@ -8,7 +8,16 @@ import type { FastifyInstance } from 'fastify';
 import type { PoolClient } from 'pg';
 
 import { pool } from '../db';
-import { syncConsentedMacs } from '../services/device-config-sync';
+import { applyAutoGuestPolicy } from '../services/auto-guest';
+import { loadActiveConsent } from '../services/consent-actions';
+import { syncDeviceConfig } from '../services/device-config-sync';
+import { normaliseMac } from '../services/mac';
+import {
+  getAccountTimeZone,
+  offlineAlertEnabled,
+  recordPresenceChange,
+  resolveOfflineNotices,
+} from '../services/notifications';
 
 interface NetworkDeviceRow {
   id: string;
@@ -19,7 +28,7 @@ interface NetworkDeviceRow {
   type: 'phone' | 'tv' | 'console' | 'unknown';
   profile: 'Child' | 'Teen' | 'Adult' | 'Admin' | null;
   protection_level: 'standard' | 'full' | 'needs-setup';
-  pairing_state: 'unpaired' | 'pairing' | 'paired' | 'failed';
+  pairing_state: 'unpaired' | 'guest' | 'pairing' | 'paired' | 'failed';
   use_full_protection: boolean;
   online: boolean;
   blocked_ads_today: number;
@@ -28,6 +37,9 @@ interface NetworkDeviceRow {
   alert_when_offline: boolean | null;
   schedule: unknown;
   created_at: string;
+  /** Računa se pri čitanju liste (GET /), nije kolona u tabeli. */
+  licence_slot?: number;
+  over_capacity?: boolean;
 }
 
 interface CreateBody {
@@ -84,14 +96,87 @@ const PATCHABLE_FIELDS = [
 
 const JSONB_FIELDS = new Set(['restrictions', 'schedule']);
 
+// Puna zastita znaci da uredjaj presrece saobracaj, a to smije samo uz
+// pristanak i dokazano instaliran zastitni profil. Taj put vodi server
+// (consent-actions.ts: pristanak -> provjera -> 'paired' + 'full'). Panel
+// nivo moze VRATITI na punu kad je profil vec tu (spustio je na
+// standardnu, pa predomislio se), ali je ne moze proglasiti bez njega.
+// Ranije je podesavanje novog uredjaja upisivalo 'full' odmah, pa je
+// kartica uredjaja pisala "Puna zastita" za uredjaj bez certifikata.
+const FULL_NEEDS_PROFILE = {
+  error: 'Puna zaštita traži pristanak i instaliran zaštitni profil.',
+  code: 'full-protection-needs-profile',
+};
+
+// pairing_state = 'paired' je ono po cemu server hubu javlja koje MAC
+// adrese smije presretati (device-config-sync.ts -> consented_macs).
+// Zato u 'paired' vodi SAMO tok pristanka: pristanak -> provjera
+// certifikata (consent-actions.ts). Ranije je ovaj CRUD primao
+// pairing_state bez ogranicenja, pa je jedan POST ili PATCH sa
+// 'paired' stavljao uredjaj pod presretanje bez ijednog zapisa o
+// pristanku. Ekrani panela to nisu radili, ali API jeste dozvoljavao.
+//
+// Panel smije samo ovo:
+//   - novi uredjaj: 'unpaired' (podrazumijevano) ili 'guest';
+//   - 'unpaired' -> 'guest': svrstavanje u goste (red "Novi uredjaji");
+//   - 'failed' ili 'paired' -> 'pairing': ponovna instalacija profila,
+//     i to samo dok pristanak vazi. Pristanak se tada ne trazi ponovo.
+// Sve ostalo (paired, failed, unpaired, i guest iz drugih stanja) radi
+// server kroz pristanak, provjeru, opoziv ili event sa huba.
+const PAIRING_STATE_SERVER_ONLY = {
+  error: 'Ovo stanje uparivanja postavlja samo tok pristanka.',
+  code: 'pairing-state-needs-consent',
+};
+
+const CREATABLE_PAIRING_STATES = new Set(['unpaired', 'guest']);
+
 export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/', async (request, reply) => {
-    const { rows } = await pool.query<NetworkDeviceRow>(
-      'SELECT * FROM network_devices WHERE account_id = $1 ORDER BY created_at DESC',
-      [request.accountId],
-    );
+    const client = await pool.connect();
 
-    return reply.send(rows);
+    try {
+      // Politika se primjenjuje pri čitanju, kao i obavještenja o
+      // kapacitetu i prisutnosti — bez posla u pozadini koji bi mogao
+      // stati a da to niko ne primijeti.
+      await applyAutoGuestPolicy(client, request.accountId!);
+
+      // Prekoračenje licence se NE pamti u koloni nego se računa pri
+      // čitanju, po redoslijedu pojavljivanja: prvih `capacity`
+      // uređaja je unutar licence, ostali su preko. Zapamćena zastava
+      // bi zastarjela čim vlasnik obriše neki uređaj — ovako se mjesto
+      // samo oslobodi.
+      //
+      // Nalog bez uparenog hub-a nema ni licencu, pa nema ni
+      // prekoračenja. Panel je do sada u tom slučaju prikazivao
+      // zakucanih "20", što je bila izmišljena granica.
+      const { rows } = await client.query<NetworkDeviceRow>(
+        `WITH licence AS (
+           SELECT coalesce(d.capacity, 0) AS capacity
+           FROM devices d
+           WHERE d.claimed_by_account_id = $1
+           ORDER BY d.created_at ASC
+           LIMIT 1
+         ),
+         ranked AS (
+           SELECT nd.*,
+                  -- ::int jer bi bigint stigao u panel kao string.
+                  (row_number() OVER (ORDER BY nd.created_at ASC, nd.id ASC))::int
+                    AS licence_slot
+           FROM network_devices nd
+           WHERE nd.account_id = $1
+         )
+         SELECT ranked.*,
+                (coalesce((SELECT capacity FROM licence), 0) > 0
+                 AND ranked.licence_slot > (SELECT capacity FROM licence)) AS over_capacity
+         FROM ranked
+         ORDER BY ranked.created_at DESC`,
+        [request.accountId],
+      );
+
+      return reply.send(rows);
+    } finally {
+      client.release();
+    }
   });
 
   fastify.post<{ Body: CreateBody }>('/', async (request, reply) => {
@@ -99,6 +184,25 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
 
     if (!body.mac_address || !body.name) {
       return reply.code(400).send({ error: 'mac_address i name su obavezni.' });
+    }
+
+    if (body.pairing_state !== undefined && !CREATABLE_PAIRING_STATES.has(body.pairing_state)) {
+      return reply.code(400).send(PAIRING_STATE_SERVER_ONLY);
+    }
+
+    if (body.protection_level === 'full' && body.pairing_state !== 'paired') {
+      return reply.code(400).send(FULL_NEEDS_PROFILE);
+    }
+
+    // Isti oblik kao sa huba (services/mac.ts). Bez ovoga je uređaj koji
+    // vlasnik doda velikim slovima za hub nevidljiv, a kad ga hub javi
+    // kao nov, postane drugi uređaj i uzme drugo mjesto u licenci.
+    const macAddress = normaliseMac(body.mac_address);
+
+    if (!macAddress) {
+      return reply
+        .code(400)
+        .send({ error: 'mac_address mora biti MAC adresa, npr. aa:bb:cc:dd:ee:ff.' });
     }
 
     const client = await pool.connect();
@@ -119,6 +223,7 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
 
       const resolvedBody: CreateBody = {
         ...body,
+        mac_address: macAddress,
         fornect_device_id: hubRows[0]?.id ?? null,
       };
 
@@ -138,7 +243,7 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       const created = rows[0]!;
 
       if (created.pairing_state === 'paired') {
-        await syncConsentedMacs(client, created.account_id, created.fornect_device_id);
+        await syncDeviceConfig(client, created.account_id, created.fornect_device_id);
       }
 
       await client.query('COMMIT');
@@ -198,6 +303,30 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
         return reply.code(404).send({ error: 'Uređaj nije pronađen.' });
       }
 
+      const nextPairing = body.pairing_state;
+
+      if (nextPairing !== undefined && nextPairing !== before.pairing_state) {
+        const allowed =
+          (nextPairing === 'guest' && before.pairing_state === 'unpaired') ||
+          (nextPairing === 'pairing' &&
+            (before.pairing_state === 'failed' || before.pairing_state === 'paired') &&
+            (await loadActiveConsent(client, before.id)) !== undefined);
+
+        if (!allowed) {
+          await client.query('ROLLBACK');
+          return reply.code(400).send(PAIRING_STATE_SERVER_ONLY);
+        }
+
+        // Ponovna instalacija sa 'paired': uredjaj izlazi iz
+        // consented_macs, pa ni nivo vise nije puni. Isto radi
+        // consent-actions.ts kad uredjaj napusti 'paired'.
+        if (before.pairing_state === 'paired' && body.protection_level === undefined) {
+          fields.push(
+            `protection_level = CASE WHEN protection_level = 'full' THEN 'standard' ELSE protection_level END`,
+          );
+        }
+      }
+
       values.push(request.params.id, request.accountId);
 
       const { rows } = await client.query<NetworkDeviceRow>(
@@ -209,7 +338,32 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
 
       const after = rows[0]!;
 
+      // Provjerava se samo kad zahtjev TRAZI punu. Zatecena 'full' uz
+      // drugo stanje ne smije blokirati npr. preimenovanje.
+      if (body.protection_level === 'full' && after.pairing_state !== 'paired') {
+        await client.query('ROLLBACK');
+        return reply.code(400).send(FULL_NEEDS_PROFILE);
+      }
+
       await syncIfPairingChanged(client, before, after);
+
+      // Obavještenje o odlasku sa mreže nastaje ovdje, a ne u panelu
+      // pri otvaranju liste. Isti poziv radi i ruta kojom hub javlja
+      // prisutnost — da poruka ne zavisi od toga ko je promjenu javio.
+      if (before.online !== after.online) {
+        await recordPresenceChange(
+          client,
+          after.account_id,
+          await getAccountTimeZone(client, after.account_id),
+          before,
+          after,
+        );
+      }
+
+      // Isključeno praćenje skida i ono što o tom uređaju već stoji.
+      if (offlineAlertEnabled(before) && !offlineAlertEnabled(after)) {
+        await resolveOfflineNotices(client, after.account_id, after.id);
+      }
 
       await client.query('COMMIT');
 
@@ -241,7 +395,7 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       }
 
       if (deleted.pairing_state === 'paired') {
-        await syncConsentedMacs(client, deleted.account_id, deleted.fornect_device_id);
+        await syncDeviceConfig(client, deleted.account_id, deleted.fornect_device_id);
       }
 
       await client.query('COMMIT');
@@ -270,10 +424,10 @@ async function syncIfPairingChanged(
 
   // Ako se hub promijenio u istom PATCH-u dok je i dalje uparen, treba
   // osvježiti listu i na starom i na novom hub-u.
-  await syncConsentedMacs(client, after.account_id, after.fornect_device_id);
+  await syncDeviceConfig(client, after.account_id, after.fornect_device_id);
 
   if (before.fornect_device_id && before.fornect_device_id !== after.fornect_device_id) {
-    await syncConsentedMacs(client, before.account_id, before.fornect_device_id);
+    await syncDeviceConfig(client, before.account_id, before.fornect_device_id);
   }
 }
 

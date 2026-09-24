@@ -1,0 +1,218 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  font-family: var(--fn-font);
+  background: var(--fn-bg);
+  color: var(--fn-ink);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 32px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--fn-border);
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--fn-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--fn-muted);
+  font-size: 14px;
+}
+
+.back-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--fn-border-strong);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--fn-ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.back-button:hover,
+.secondary-button:hover {
+  background: var(--fn-surface-muted);
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--fn-orange-btn);
+  border-radius: 12px;
+  background: var(--fn-orange-btn);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary-button:hover {
+  background: var(--fn-orange-btn-strong);
+}
+
+.content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.capacity-explainer,
+.overflow-section {
+  margin: 0 0 20px;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid var(--fn-border);
+  border-radius: 18px;
+}
+
+.capacity-explainer h2,
+.overflow-section h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.capacity-explainer p {
+  margin: 0 0 12px;
+  color: var(--fn-muted);
+  line-height: 1.6;
+}
+
+/* Granica ide uz objašnjenje, ne u sitna slova ispod: vlasnik mora
+   odmah znati da uređaj preko licence i dalje radi, samo nezaštićen. */
+.capacity-limit-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--fn-border-strong);
+  background: var(--fn-surface-muted);
+  font-size: 13px;
+}
+
+.overflow-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overflow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--fn-border);
+  border-radius: 14px;
+}
+
+.device-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.device-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--fn-surface-muted);
+  font-size: 20px;
+}
+
+.device-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.device-text strong {
+  font-size: 16px;
+}
+
+.device-text small {
+  color: var(--fn-muted);
+  font-size: 12px;
+}
+
+.device-mac,
+.device-slot {
+  font-family: ui-monospace, monospace;
+}
+
+.capacity-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.empty-state {
+  padding: 40px 24px;
+  text-align: center;
+  background: #ffffff;
+  border: 1px solid var(--fn-border);
+  border-radius: 20px;
+}
+
+.empty-state h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.empty-state p {
+  margin: 0 0 20px;
+  color: var(--fn-muted);
+  line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .content {
+    padding: 20px;
+  }
+
+  .overflow-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .capacity-actions .secondary-button,
+  .capacity-actions .primary-button {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}

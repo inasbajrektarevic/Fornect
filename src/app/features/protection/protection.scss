@@ -1,3 +1,10 @@
+/* Ekran zaštite je najveći stil u projektu i jedini koji je prelazio
+   Angularov budžet za stil komponente (upozorenje na 8 kB, greška na
+   12 kB). Prekoračen budžet nije kozmetika: na grešci build staje.
+   Ništa nije obrisano — sve klase se koriste. Skraćeno je ponavljanje:
+   pravila koja su bila prepisana za tri-četiri selektora sada stoje
+   jednom, a razlike ostaju izdvojene. */
+
 :host {
   display: block;
   min-height: 100vh;
@@ -20,18 +27,28 @@
   border-bottom: 1px solid var(--fn-border);
 }
 
-.eyebrow {
-  margin: 0 0 6px;
+.topbar h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.eyebrow,
+.card-label {
   color: var(--fn-muted);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
   letter-spacing: 0.08em;
 }
 
-.topbar h1 {
-  margin: 0;
-  font-size: 28px;
+.card-label {
+  display: block;
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
 }
 
 .subtitle {
@@ -40,19 +57,41 @@
   font-size: 14px;
 }
 
-.back-button {
-  border: 1px solid var(--fn-border-strong);
-  background: #ffffff;
-  color: var(--fn-ink);
-  border-radius: 12px;
-  padding: 11px 16px;
+/* Sva tri dugmeta dijele oblik i visinu dodirne mete (44px je
+   minimum koji projekat drži svuda drugdje), pa se razlikuju samo
+   po boji. Nazad dugme je ranije bilo nešto niže od ostalih — sada
+   je poravnato sa njima. */
+.back-button,
+.secondary-button,
+.primary-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 11px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
 }
 
-.back-button:hover {
+.back-button,
+.secondary-button {
+  border: 1px solid var(--fn-border-strong);
+  background: #ffffff;
+  color: var(--fn-ink);
+}
+
+.back-button:hover,
+.secondary-button:hover {
   background: var(--fn-surface-muted);
+}
+
+.primary-button {
+  border: 1px solid var(--fn-orange-btn);
+  background: var(--fn-orange-btn);
+  color: #ffffff;
+}
+
+.primary-button:hover {
+  background: var(--fn-orange-btn-strong);
 }
 
 .content {
@@ -76,16 +115,6 @@
   margin-bottom: 28px;
 }
 
-.card-label {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--fn-muted);
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
 .section-heading h2 {
   margin: 0;
   font-size: 26px;
@@ -100,17 +129,16 @@
   font-weight: 700;
 }
 
+.protection-off-badge {
+  background: #eef0f3 !important;
+  color: #6f7a8a !important;
+}
+
 .protection-options {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   margin-bottom: 12px;
-}
-
-@media (max-width: 900px) {
-  .protection-options {
-    grid-template-columns: 1fr;
-  }
 }
 
 .protection-option {
@@ -146,32 +174,10 @@
   box-shadow: 0 0 0 1px var(--fn-ink);
 }
 
-.level-hint {
-  margin: 0 0 30px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--fn-muted);
-}
-
 /* Zakljucana jacina ostaje citljiva i klikabilna: klik vodi u
    instalaciju profila umjesto da ne uradi nista. */
 .protection-option.locked .option-icon {
   background: var(--fn-muted);
-}
-
-.option-lock {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--fn-orange);
-}
-
-.prerequisite-hint {
-  margin: 6px 0 18px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--fn-muted);
 }
 
 .option-icon {
@@ -187,16 +193,47 @@
   font-weight: 800;
 }
 
+.option-lock {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fn-orange);
+}
+
 .protection-option h3 {
   margin: 0 0 6px;
   font-size: 17px;
 }
 
-.protection-option p {
-  margin: 0;
+.level-hint,
+.prerequisite-hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fn-muted);
+}
+
+.level-hint {
+  margin: 0 0 30px;
+}
+
+.prerequisite-hint {
+  margin: 6px 0 18px;
+}
+
+.protection-option p,
+.pairing-section > p {
   color: var(--fn-muted);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.protection-option p {
+  margin: 0;
+}
+
+.pairing-section > p {
+  margin: 0 0 20px;
 }
 
 .pairing-section {
@@ -209,22 +246,64 @@
   font-size: 20px;
 }
 
-.pairing-section > p {
-  margin: 0 0 20px;
-  color: var(--fn-muted);
-  font-size: 14px;
-  line-height: 1.5;
+/* Tri poruke o stanju uparivanja — uspjeh, tok, greška — imaju isti
+   oblik i razlikuju se samo bojom. */
+.pairing-status,
+.pairing-progress,
+.pairing-error {
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid;
+  border-radius: 14px;
 }
 
-.pairing-status {
+.pairing-status,
+.pairing-progress {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 16px;
-  margin-bottom: 20px;
-  border: 1px solid #dcfce7;
-  border-radius: 14px;
+}
+
+.pairing-status {
+  border-color: #dcfce7;
   background: #f0fdf4;
+}
+
+.pairing-progress {
+  border-color: #dbeafe;
+  background: #eff6ff;
+}
+
+.pairing-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.pairing-status strong,
+.pairing-progress strong,
+.pairing-error strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.pairing-status strong {
+  color: #166534;
+}
+
+.pairing-progress strong {
+  color: #1d4ed8;
+}
+
+.pairing-error strong {
+  color: #b91c1c;
+}
+
+.pairing-status p,
+.pairing-progress p,
+.pairing-error p {
+  margin: 0;
+  color: #4b5563;
+  font-size: 14px;
 }
 
 .status-dot {
@@ -236,34 +315,28 @@
   flex-shrink: 0;
 }
 
-.pairing-status strong {
-  display: block;
-  margin-bottom: 4px;
-  color: #166534;
+.progress-spinner {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  border: 3px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: spin 0.8s linear infinite;
 }
 
-.pairing-status p {
-  margin: 0;
-  color: #4b5563;
-  font-size: 14px;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.secondary-button {
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--fn-border-strong);
-  border-radius: 11px;
-  background: #ffffff;
-  color: var(--fn-ink);
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
+.pairing-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
-
-.secondary-button:hover {
-  background: var(--fn-surface-muted);
-}
-
 
 .cert-guide {
   margin: 18px 0;
@@ -321,139 +394,12 @@
   margin-bottom: 0;
 }
 
-@media (max-width: 720px) {
-  .protection-options {
-    grid-template-columns: 1fr;
-  }
-
-  .section-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 600px) {
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 20px;
-  }
-
-  .content {
-    padding: 20px;
-  }
-
-  .protection-card {
-    padding: 22px;
-  }
-}
-
-.primary-button {
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--fn-orange-btn);
-  border-radius: 11px;
-  background: var(--fn-orange-btn);
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.primary-button:hover {
-  background: var(--fn-orange-btn-strong);
-}
-
-.pairing-progress {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px;
-  margin-bottom: 20px;
-  border: 1px solid #dbeafe;
-  border-radius: 14px;
-  background: #eff6ff;
-}
-
-.progress-spinner {
-  width: 18px;
-  height: 18px;
-  margin-top: 2px;
-  border: 3px solid #bfdbfe;
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  flex-shrink: 0;
-  animation: spin 0.8s linear infinite;
-}
-
-.pairing-progress strong {
-  display: block;
-  margin-bottom: 4px;
-  color: #1d4ed8;
-}
-
-.pairing-progress p {
-  margin: 0;
-  color: #4b5563;
-  font-size: 14px;
-}
-
-.pairing-error {
-  padding: 16px;
-  margin-bottom: 20px;
-  border: 1px solid #fecaca;
-  border-radius: 14px;
-  background: #fef2f2;
-}
-
-.pairing-error strong {
-  display: block;
-  margin-bottom: 4px;
-  color: #b91c1c;
-}
-
-.pairing-error p {
-  margin: 0;
-  color: #4b5563;
-  font-size: 14px;
-}
-
-.pairing-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 600px) {
-  .pairing-actions {
-    flex-direction: column;
-  }
-
-  .pairing-actions button {
-    width: 100%;
-  }
-}
-
-.protection-off-badge {
-  background: #eef0f3 !important;
-  color: #6f7a8a !important;
-}
-
+/* Kartica sa brojkom. Kartica "zaštita van kuće" je izdvojena u
+   zasebnu komponentu (away-card/). */
+.protection-stat-card,
 .protection-stat-card {
-  margin-bottom: 24px;
   padding: 18px 20px;
-  display: flex;
-  align-items: center;
   gap: 15px;
-  border: 1px solid var(--fn-border);
-  border-radius: 15px;
-  background: white;
 }
 
 .stat-icon {
@@ -493,78 +439,184 @@
   font-size: 13px;
 }
 
-.away-protection-card {
-  margin-bottom: 24px;
-  padding: 19px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+/* Pristanak: forma, zapis i upozorenje o novoj verziji politike. */
+
+.consent-form,
+.consent-record,
+.consent-warning,
+.cert-fingerprint {
+  margin-top: 16px;
+  padding: 16px;
   border: 1px solid var(--fn-border);
-  border-radius: 15px;
-  background: white;
+  border-radius: 14px;
+  background: var(--fn-surface-muted);
 }
 
-.away-protection-card h3 {
-  margin: 5px 0 0;
-  color: var(--fn-ink);
-}
-
-.away-protection-card p {
-  max-width: 600px;
-  margin: 7px 0 0;
-  color: var(--fn-muted);
-  line-height: 1.5;
-}
-
-.away-protection-card small {
+.consent-form h3,
+.consent-warning strong {
   display: block;
-  margin-top: 8px;
-  color: #9a6c42;
+  margin: 0 0 6px;
+  font-size: 16px;
 }
 
-.away-protection-card--disabled {
-  background: var(--fn-bg);
-  opacity: 0.8;
+.consent-field {
+  display: block;
+  margin-bottom: 12px;
 }
 
-.away-toggle {
-  min-width: 92px;
-  padding: 7px 10px 7px 7px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border: 1px solid #d5dce6;
-  border-radius: 999px;
-  background: #e7ebf0;
-  color: #687487;
-  font: inherit;
+.consent-field span {
+  display: block;
+  margin-bottom: 5px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+}
+
+.consent-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--fn-border-strong);
+  border-radius: 10px;
+  background: #ffffff;
+  font: inherit;
+}
+
+.consent-field input:focus {
+  outline: none;
+  border-color: var(--fn-orange);
+  box-shadow: 0 0 0 3px rgba(245, 130, 31, 0.12);
+}
+
+.consent-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 1.5;
   cursor: pointer;
 }
 
-.away-toggle-thumb {
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 2px 6px rgba(23, 32, 51, 0.16);
+.consent-check input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  accent-color: var(--fn-ink);
+  cursor: pointer;
 }
 
-.away-toggle--active {
-  border-color: var(--fn-orange);
-  background: var(--fn-orange);
-  color: white;
+.consent-error {
+  margin: 10px 0 0;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.away-toggle:disabled {
-  cursor: not-allowed;
+.consent-warning {
+  border-color: rgba(245, 130, 31, 0.35);
+  background: rgba(245, 130, 31, 0.08);
 }
 
-@media (max-width: 600px) {
-  .away-protection-card {
+.consent-record dl {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.consent-record dt {
+  color: var(--fn-muted);
+  font-size: 12px;
+}
+
+.consent-record dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cert-fingerprint code {
+  display: block;
+  margin: 8px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* Uputstvo za uklanjanje certifikata nakon opoziva pristanka. */
+.cert-removal {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Iskreno navođenje dometa zaštite (Zadatak 1, Oblast C). Stoji uz
+   izbor nivoa, ne u sitnim slovima na dnu — brojka bez granica je
+   obećanje, a obećanje koje se ne može dokazati je pravni rizik. */
+.coverage-note {
+  margin: -6px 0 22px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ads-note {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cert-removal,
+.coverage-note,
+.ads-note {
+  color: var(--fn-muted);
+}
+
+@media (max-width: 900px) {
+  .protection-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .section-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* Jedan blok za telefon umjesto tri razbacana kroz fajl. */
+@media (max-width: 600px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .content {
+    padding: 20px;
+  }
+
+  .protection-card {
+    padding: 22px;
+  }
+
+  .pairing-actions {
+    flex-direction: column;
+  }
+
+  .pairing-actions button {
+    width: 100%;
+  }
+}
+
+/* Dodirne mete na telefonu. */
+@media (pointer: coarse) {
+  .consent-check input {
+    width: 24px;
+    height: 24px;
   }
 }

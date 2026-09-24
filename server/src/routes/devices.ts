@@ -6,9 +6,19 @@
 import type { FastifyInstance } from 'fastify';
 
 import { pool } from '../db';
+import { env } from '../env';
 import { authenticateDevice } from '../plugins/authenticate-device';
 import { generateDeviceToken, hashDeviceToken } from '../services/device-tokens';
 import { generatePairingCode, PAIRING_CODE_TTL_MINUTES } from '../services/hub-pairing';
+import { normaliseMac } from '../services/mac';
+
+import {
+  getAccountTimeZone,
+  recordPresenceChange,
+  syncCapacityNotice,
+  type PresenceDeviceRow,
+} from '../services/notifications';
+
 import type { DeviceRow } from '../types';
 
 interface RegisterBody {
@@ -20,10 +30,31 @@ interface RegisterBody {
 
 interface HeartbeatBody {
   stats?: Record<string, unknown>;
+
+  // Verzije softvera na uređaju (Zadatak 1, Tačka 6: inventar verzija).
+  // Slobodan oblik ključ→verzija, npr. { fornectd: '0.4.1',
+  // pihole: '6.0.2', squid: '6.10', portal_bundle: '12' }, jer se skup
+  // komponenti mijenja, a panel ih ionako prikazuje kao listu.
+  //
+  // Dok uređaj ovo ne šalje, ostaje NULL i panel to jasno kaže.
+  versions?: Record<string, unknown>;
 }
 
 interface ConfigAckBody {
   version?: number;
+}
+
+interface CaBody {
+  certificate_pem?: string;
+  fingerprint_sha256?: string;
+}
+
+interface PresenceBody {
+  macs?: unknown;
+}
+
+interface PresenceRow extends PresenceDeviceRow {
+  mac_address: string;
 }
 
 export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
@@ -35,7 +66,7 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
       // (VPN/allowlist) ne postavi odvojeno na VPS-u.
       config: {
         rateLimit: {
-          max: 10,
+          max: env.deviceRegisterMaxPerHour,
           timeWindow: '1 hour',
         },
       },
@@ -117,12 +148,27 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
     { preHandler: authenticateDevice },
     async (request, reply) => {
       const device = request.device!;
-      const { stats } = request.body ?? {};
+      const { stats, versions } = request.body ?? {};
+
+      // Verzije se denormalizuju na devices samo kad stvarno stignu.
+      // Heartbeat bez njih NE briše ranije prijavljene: uređaj koji je
+      // privremeno na starijem agentu ne smije obrisati podatak i
+      // ostaviti panel da misli da ništa nije poznato.
+      const reportedVersions =
+        versions && typeof versions === 'object' && !Array.isArray(versions) ? versions : null;
 
       await pool.query(
-        `UPDATE devices SET status = 'online', last_seen_at = now(), updated_at = now()
+        `UPDATE devices
+         SET status = 'online',
+             last_seen_at = now(),
+             updated_at = now(),
+             reported_versions = COALESCE($2::jsonb, reported_versions),
+             reported_versions_at = CASE
+               WHEN $2::jsonb IS NULL THEN reported_versions_at
+               ELSE now()
+             END
          WHERE id = $1`,
-        [device.id],
+        [device.id, reportedVersions ? JSON.stringify(reportedVersions) : null],
       );
 
       await pool.query(
@@ -131,6 +177,95 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
       );
 
       return reply.send({ ok: true, received_at: new Date().toISOString() });
+    },
+  );
+
+  // Hub javlja koje MAC adrese trenutno vidi na mreži.
+  //
+  // Ovo je jedini put kojim obavještenje o odlasku sa mreže može
+  // nastati dok je aplikacija zatvorena — a to je bio cijeli smisao
+  // funkcije. Dok Zadatak 2 ne isporuči agenta koji ovo šalje,
+  // prisutnost i dalje javlja panel, pa obavještenje nastaje tek kad
+  // neko otvori aplikaciju. Ruta postoji da taj dan ne traži izmjenu
+  // ni u jednom drugom fajlu — samo da hub počne slati.
+  fastify.post<{ Params: { id: string }; Body: PresenceBody }>(
+    '/:id/network-presence',
+    { preHandler: authenticateDevice },
+    async (request, reply) => {
+      const hub = request.device!;
+
+      const reported = request.body?.macs;
+
+      if (!Array.isArray(reported)) {
+        return reply.code(400).send({ error: 'macs mora biti niz MAC adresa.' });
+      }
+
+      if (!hub.claimed_by_account_id) {
+        return reply
+          .code(409)
+          .send({ error: 'Uređaj još nije uparen ni sa jednim nalogom.' });
+      }
+
+      const accountId = hub.claimed_by_account_id;
+
+      // Isto pravilo kao svuda drugo (services/mac.ts). Ranije je ova
+      // ruta jedina ispravno spuštala slova — ali tako što je obje strane
+      // spuštala u JS-u, pa je problem u bazi ostajao sakriven.
+      const present = new Set(
+        reported.map(normaliseMac).filter((mac): mac is string => mac !== null),
+      );
+
+      const client = await pool.connect();
+
+      try {
+        await client.query('BEGIN');
+
+        // FOR UPDATE: prijelaz se računa iz stanja koje se u istoj
+        // transakciji mijenja, pa dvije prijave koje stignu jedna
+        // preko druge ne mogu obje vidjeti "bio je online".
+        const { rows: devices } = await client.query<PresenceRow>(
+          `SELECT id, name, profile, online, alert_when_offline, schedule, mac_address
+           FROM network_devices
+           WHERE account_id = $1 AND fornect_device_id = $2
+           FOR UPDATE`,
+          [accountId, hub.id],
+        );
+
+        const timeZone = await getAccountTimeZone(client, accountId);
+
+        let changed = 0;
+
+        for (const before of devices) {
+          const online = present.has(before.mac_address);
+
+          if (online === before.online) {
+            continue;
+          }
+
+          await client.query('UPDATE network_devices SET online = $2 WHERE id = $1', [
+            before.id,
+            online,
+          ]);
+
+          await recordPresenceChange(client, accountId, timeZone, before, {
+            ...before,
+            online,
+          });
+
+          changed += 1;
+        }
+
+        await syncCapacityNotice(client, accountId);
+
+        await client.query('COMMIT');
+
+        return reply.send({ ok: true, devices: devices.length, changed });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
     },
   );
 
@@ -184,6 +319,52 @@ export async function deviceRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       return reply.send({ ok: true });
+    },
+  );
+
+  // Hub prijavljuje JAVNI dio svog CA certifikata. Ključ ostaje na
+  // uređaju — vidi komentar uz migraciju 010.
+  fastify.post<{ Params: { id: string }; Body: CaBody }>(
+    '/:id/ca',
+    { preHandler: authenticateDevice },
+    async (request, reply) => {
+      const device = request.device!;
+      const { certificate_pem, fingerprint_sha256 } = request.body ?? {};
+
+      if (!certificate_pem || !fingerprint_sha256) {
+        return reply
+          .code(400)
+          .send({ error: 'certificate_pem i fingerprint_sha256 su obavezni.' });
+      }
+
+      // Zaštita od najgore moguće greške u agentu: da slučajno ne
+      // pošalje privatni ključ umjesto certifikata. Odbijamo ga prije
+      // nego dodirne bazu — jednom upisan ključ bi se morao smatrati
+      // kompromitovanim.
+      if (/PRIVATE KEY/i.test(certificate_pem)) {
+        return reply.code(400).send({
+          error:
+            'Poslan je privatni ključ. Ovdje se prima samo javni certifikat.',
+        });
+      }
+
+      if (!/BEGIN CERTIFICATE/.test(certificate_pem)) {
+        return reply
+          .code(400)
+          .send({ error: 'certificate_pem nije PEM certifikat.' });
+      }
+
+      await pool.query(
+        `UPDATE devices
+         SET ca_certificate_pem = $2,
+             ca_fingerprint_sha256 = $3,
+             ca_registered_at = now(),
+             updated_at = now()
+         WHERE id = $1`,
+        [device.id, certificate_pem, fingerprint_sha256],
+      );
+
+      return reply.send({ ok: true, fingerprint_sha256 });
     },
   );
 }

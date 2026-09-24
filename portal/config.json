@@ -1,0 +1,14 @@
+{
+  "brandName": "Fornect",
+  "accentColor": "#f5821f",
+  "welcomeTitle": {
+    "bs": "Dobrodošli na zaštićenu mrežu",
+    "en": "Welcome to a protected network"
+  },
+  "welcomeMessage": {
+    "bs": "Ova mreža filtrira reklame i praćenje. Izaberite kako želite da se vaš uređaj štiti.",
+    "en": "This network filters ads and tracking. Choose how you want your device protected."
+  },
+  "supportContact": "",
+  "privacyPolicyUrl": ""
+}

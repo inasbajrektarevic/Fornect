@@ -130,6 +130,14 @@ export class ProtectionOverview {
           'protectionOverview.pairingFailed'
         );
 
+      // Gost nije "neupareno" nego svjestan izbor osnovne zastite -
+      // prikazivati ih isto bi vratilo tacno onu zabunu zbog koje je
+      // stanje 'guest' i uvedeno.
+      case 'guest':
+        return this.languageService.t(
+          'protectionOverview.guest'
+        );
+
       default:
         return this.languageService.t(
           'protectionOverview.notPaired'

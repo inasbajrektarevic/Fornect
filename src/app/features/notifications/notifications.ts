@@ -1,14 +1,20 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import {
   FornectNotification,
-  NotificationService
+  NotificationService,
+  NotificationTimeLabel,
+  notificationTimeLabel
 } from '../../core/services/notification';
 
 import {
   TranslatePipe
 } from '../../shared/pipes/translate';
+
+interface NotificationView extends FornectNotification {
+  time: NotificationTimeLabel;
+}
 
 @Component({
   selector: 'app-notifications',
@@ -23,27 +29,32 @@ export class Notifications {
   private readonly notificationService =
     inject(NotificationService);
 
-  notifications: FornectNotification[] =
-    this.notificationService.getNotifications();
+  /**
+   * Vrijeme se računa jednom po osvježavanju liste, umjesto da se
+   * poziva iz šablona — inače bi se računalo pri svakoj provjeri
+   * promjena, a rezultat bi zavisio od trenutka, pa Angular ne bi
+   * mogao znati da se ništa nije promijenilo.
+   */
+  readonly notifications = computed<NotificationView[]>(() =>
+    this.notificationService.notifications().map(notification => ({
+      ...notification,
+      time: notificationTimeLabel(notification.createdAt)
+    }))
+  );
 
-  get unreadCount(): number {
-    return this.notifications.filter(
-      notification => !notification.read
-    ).length;
+  readonly unreadCount = this.notificationService.unreadCount;
+
+  constructor() {
+    // Lista se učitava i pri prijavi, ali ekran se otvara i mnogo
+    // kasnije — tada treba svježe stanje, ne ono od jutros.
+    void this.notificationService.reload();
   }
 
   markAsRead(id: string): void {
-    this.notificationService.markAsRead(id);
-    this.refresh();
+    void this.notificationService.markAsRead(id);
   }
 
   markAllAsRead(): void {
-    this.notificationService.markAllAsRead();
-    this.refresh();
-  }
-
-  private refresh(): void {
-    this.notifications =
-      this.notificationService.getNotifications();
+    void this.notificationService.markAllAsRead();
   }
 }

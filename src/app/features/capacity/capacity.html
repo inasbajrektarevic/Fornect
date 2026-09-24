@@ -1,0 +1,137 @@
+<div class="capacity-page">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">
+        {{ 'capacity.eyebrow' | translate }}
+      </p>
+
+      <h1>
+        {{ 'capacity.title' | translate }}
+      </h1>
+
+      @if (capacity() > 0) {
+        <p class="subtitle">
+          {{
+            'capacity.subtitle'
+              | translate:{
+                  used: deviceCount(),
+                  capacity: capacity()
+                }
+          }}
+        </p>
+      }
+    </div>
+
+    <button
+      type="button"
+      class="back-button"
+      routerLink="/dashboard">
+      {{ 'common.backToDashboard' | translate }}
+    </button>
+  </header>
+
+  <main class="content">
+    @if (hasOverflow()) {
+      <section class="capacity-explainer">
+        <h2>
+          {{ 'capacity.whatItMeans' | translate }}
+        </h2>
+
+        <p>
+          {{ 'capacity.explanation' | translate }}
+        </p>
+
+        <p class="capacity-limit-note">
+          {{ 'capacity.notBlockedNote' | translate }}
+        </p>
+      </section>
+
+      <section class="overflow-section">
+        <h2>
+          {{
+            'capacity.overflowTitle'
+              | translate:{ count: devices().length }
+          }}
+        </h2>
+
+        <ul class="overflow-list">
+          @for (device of devices(); track device.id) {
+            <li class="overflow-item">
+              <div class="device-main">
+                <div class="device-icon">
+                  {{ deviceIcon(device) }}
+                </div>
+
+                <div class="device-text">
+                  <strong>{{ device.name }}</strong>
+
+                  <small class="device-mac">
+                    {{ device.macAddress }}
+                  </small>
+
+                  @if (slotLabel(device)) {
+                    <small class="device-slot">
+                      {{ 'capacity.slot' | translate }}
+                      {{ slotLabel(device) }}
+                    </small>
+                  }
+                </div>
+              </div>
+
+              <a
+                class="secondary-button"
+                [routerLink]="['/devices', device.id]">
+                {{ 'capacity.openDevice' | translate }}
+              </a>
+            </li>
+          }
+        </ul>
+      </section>
+
+      <section class="capacity-actions">
+        <a
+          routerLink="/devices"
+          class="secondary-button">
+          {{ 'capacity.freeUpSlot' | translate }}
+        </a>
+
+        <a
+          [routerLink]="upgradeLink()"
+          class="primary-button">
+          {{ upgradeLabelKey() | translate }}
+        </a>
+      </section>
+    } @else {
+      <div class="empty-state">
+        <h2>
+          {{
+            (capacity() > 0
+              ? 'capacity.okTitle'
+              : 'capacity.noHubTitle') | translate
+          }}
+        </h2>
+
+        <p>
+          @if (capacity() > 0) {
+            {{
+              'capacity.okBody'
+                | translate:{
+                    used: deviceCount(),
+                    capacity: capacity()
+                  }
+            }}
+          } @else {
+            {{ 'capacity.noHubBody' | translate }}
+          }
+        </p>
+
+        <button
+          type="button"
+          class="secondary-button"
+          routerLink="/devices">
+          {{ 'capacity.allDevices' | translate }}
+        </button>
+      </div>
+    }
+  </main>
+</div>

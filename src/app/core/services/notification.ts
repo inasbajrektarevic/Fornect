@@ -1,311 +1,214 @@
-import { inject, Injectable } from '@angular/core';
+import { computed, effect, inject, Injectable, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 
+import { API_BASE_URL } from '../config/api.config';
 import { AuthService } from './auth';
-import { DeviceService } from './device';
-import { HubService } from './hub';
-import { isPausedAt } from './schedule';
 
 export type NotificationType =
   | 'offline'
   | 'update'
   | 'protection'
-  | 'capacity';
+  | 'capacity'
+  | 'new-device'
+  | 'consent';
 
 export interface FornectNotification {
   id: string;
   type: NotificationType;
   titleKey: string;
   messageKey: string;
-  timeKey: string;
   params?: Record<string, string | number>;
   read: boolean;
+  /** Stvarno vrijeme nastanka, sa servera. */
+  createdAt: string;
 }
 
+interface NotificationApiRow {
+  id: string;
+  type: NotificationType;
+  title_key: string;
+  message_key: string;
+  params: Record<string, string | number> | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+/**
+ * Obavještenja dolaze sa servera.
+ *
+ * Ranije su živjela u localStorage-u i nastajala tek pri otvaranju
+ * liste. To je značilo da se obavještenje o uređaju koji je noću
+ * napustio mrežu nije ni napravilo ako niko nije otvorio aplikaciju, a
+ * ako se uređaj do jutra vratio — nestalo bi i da jeste. Sada ih pravi
+ * server (server/src/services/notifications.ts), pa ovdje ostaje samo
+ * čitanje i označavanje pročitanog.
+ *
+ * Stanje je u signalima, a ne u metodama koje računaju pri svakom
+ * pozivu: aplikacija je zoneless, pa je signal ono što će osvježiti
+ * ekran kada odgovor sa servera stigne.
+ */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class NotificationService {
+  private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
-  private readonly deviceService = inject(DeviceService);
-  private readonly hubService = inject(HubService);
 
-  private readonly capacityId = 'capacity-1';
-  private readonly offlineAlertPrefix = 'device-offline-';
+  private readonly items = signal<FornectNotification[]>([]);
 
-  getNotifications(): FornectNotification[] {
-    const accountId =
-      this.authService.currentUser()?.accountId;
+  readonly notifications = this.items.asReadonly();
 
-    if (!accountId) {
-      return [];
-    }
+  readonly unreadCount = computed(
+    () => this.items().filter((notification) => !notification.read).length,
+  );
 
-    let notifications: FornectNotification[] | null = null;
-
-    const saved = localStorage.getItem(
-      this.storageKey(accountId)
-    );
-
-    if (saved) {
-      try {
-        notifications =
-          JSON.parse(saved) as FornectNotification[];
-      } catch {
-        localStorage.removeItem(
-          this.storageKey(accountId)
-        );
+  constructor() {
+    // Učitavanje se veže za nalog, a ne za pojedinačan ekran: brojač
+    // nepročitanih stoji na dashboardu, pa lista mora biti spremna i
+    // kada korisnik nikada ne otvori ekran obavještenja.
+    effect(() => {
+      if (this.authService.isAuthenticated()) {
+        void this.reload();
+      } else {
+        this.items.set([]);
       }
-    }
-
-    if (!notifications) {
-      notifications =
-        this.createDemoNotifications(accountId);
-
-      this.save(accountId, notifications);
-    }
-
-    const withCapacity = this.syncCapacityNotice(
-      accountId,
-      notifications
-    );
-
-    return this.syncOfflineAlerts(
-      accountId,
-      withCapacity
-    );
+    });
   }
 
-  getUnreadCount(): number {
-    return this.getNotifications()
-      .filter(notification => !notification.read)
-      .length;
-  }
+  async reload(): Promise<void> {
+    if (!this.authService.isAuthenticated()) {
+      this.items.set([]);
 
-  markAsRead(id: string): void {
-    const accountId =
-      this.authService.currentUser()?.accountId;
-
-    if (!accountId) {
       return;
     }
 
-    const notifications =
-      this.getNotifications().map(notification =>
-        notification.id === id
-          ? { ...notification, read: true }
-          : notification
+    try {
+      const rows = await firstValueFrom(
+        this.http.get<NotificationApiRow[]>(`${API_BASE_URL}/app/notifications`),
       );
 
-    this.save(accountId, notifications);
+      this.items.set(rows.map(fromApiRow));
+    } catch {
+      // Nedostupan backend ne smije obrisati ono što je već prikazano
+      // — bolje zastarjela lista nego prazna, jer prazna lista ovdje
+      // znači "nema ništa", što nije isto.
+    }
   }
 
-  markAllAsRead(): void {
-    const accountId =
-      this.authService.currentUser()?.accountId;
+  async markAsRead(id: string): Promise<void> {
+    this.applyRead((notification) => notification.id === id);
 
-    if (!accountId) {
-      return;
+    try {
+      await firstValueFrom(
+        this.http.post(`${API_BASE_URL}/app/notifications/${id}/read`, {}),
+      );
+    } catch {
+      await this.reload();
     }
+  }
 
-    const notifications =
-      this.getNotifications().map(notification => ({
-        ...notification,
-        read: true
-      }));
+  async markAllAsRead(): Promise<void> {
+    this.applyRead(() => true);
 
-    this.save(accountId, notifications);
+    try {
+      await firstValueFrom(
+        this.http.post(`${API_BASE_URL}/app/notifications/read-all`, {}),
+      );
+    } catch {
+      await this.reload();
+    }
   }
 
   /**
-   * Specifikacija traži obavještenje kada se dostigne limit
-   * kapaciteta uređaja. Ono se ne pravi ručno nego prati
-   * stvarno stanje: pojavi se kada je limit dostignut i
-   * nestane kada padne ispod limita.
+   * Odmah mijenja prikaz, pa tek onda javlja serveru. Ako javljanje ne
+   * uspije, `reload()` vrati stvarno stanje — korisnik ne smije ostati
+   * sa oznakom koja na serveru ne postoji.
    */
-  private syncCapacityNotice(
-    accountId: string,
-    notifications: FornectNotification[]
-  ): FornectNotification[] {
-    const capacity = this.hubService.hub().capacity;
-
-    const deviceCount =
-      this.deviceService.devices().length;
-
-    const limitReached =
-      capacity > 0 && deviceCount >= capacity;
-
-    const existing = notifications.some(
-      notification => notification.id === this.capacityId
-    );
-
-    if (limitReached === existing) {
-      return notifications;
-    }
-
-    const updated = limitReached
-      ? [
-          {
-            id: this.capacityId,
-            type: 'capacity' as const,
-            titleKey: 'notifications.capacityReached',
-            messageKey: 'notifications.capacityMessage',
-            timeKey: 'notifications.today',
-            params: { capacity },
-            read: false
-          },
-          ...notifications
-        ]
-      : notifications.filter(
-          notification =>
-            notification.id !== this.capacityId
-        );
-
-    this.save(accountId, updated);
-
-    return updated;
-  }
-
-  /**
-   * Obavještenje da je uređaj nestao sa mreže. Kao i ono o
-   * kapacitetu, prati stvarno stanje: stoji dok je uređaj
-   * offline i nestane kada se vrati, umjesto da se gomila.
-   *
-   * Ako je uređaj nestao dok je raspored bio aktivan, poruka je
-   * drugačija. To je jedini slučaj koji roditelju stvarno nešto
-   * govori — uređaj je napustio zaštićenu mrežu baš u vrijeme
-   * kada je pristup trebao biti pauziran. Obično gašenje uređaja
-   * nije događaj i ne treba ga tako prikazivati.
-   *
-   * Ograničenje koje se ne smije prešutjeti: aplikacija vidi
-   * samo da je uređaj nestao sa mreže. Ne može razlikovati
-   * namjeru od prazne baterije, niti vidjeti šta uređaj radi
-   * preko mobilnih podataka.
-   */
-  private syncOfflineAlerts(
-    accountId: string,
-    notifications: FornectNotification[]
-  ): FornectNotification[] {
-    const now = new Date();
-
-    const expected =
-      new Map<string, FornectNotification>();
-
-    for (const device of this.deviceService.devices()) {
-      if (
-        device.online ||
-        !this.deviceService.offlineAlertEnabled(device)
-      ) {
-        continue;
-      }
-
-      const duringSchedule = isPausedAt(
-        device.schedule,
-        now
-      );
-
-      const id =
-        `${this.offlineAlertPrefix}${device.id}`;
-
-      expected.set(id, {
-        id,
-        type: 'offline',
-        titleKey: duringSchedule
-          ? 'notifications.leftDuringSchedule'
-          : 'notifications.deviceLeftNetwork',
-        messageKey: duringSchedule
-          ? 'notifications.leftDuringScheduleMessage'
-          : 'notifications.deviceLeftNetworkMessage',
-        timeKey: 'notifications.now',
-        params: { device: device.name },
-        read: false
-      });
-    }
-
-    // Zadrzavamo postojeca obavjestenja da se ne izgubi
-    // procitan status, a uklanjamo ona za uredjaje koji
-    // su se u medjuvremenu vratili na mrezu.
-    const kept = notifications.filter(notification =>
-      !notification.id.startsWith(
-        this.offlineAlertPrefix
-      ) || expected.has(notification.id)
-    );
-
-    const added = [...expected.values()].filter(
-      notification =>
-        !kept.some(item => item.id === notification.id)
-    );
-
-    if (
-      added.length === 0 &&
-      kept.length === notifications.length
-    ) {
-      return notifications;
-    }
-
-    const updated = [...added, ...kept];
-
-    this.save(accountId, updated);
-
-    return updated;
-  }
-
-  private storageKey(accountId: string): string {
-    return `fornect-notifications-v3-${accountId}`;
-  }
-
-  private save(
-    accountId: string,
-    notifications: FornectNotification[]
-  ): void {
-    localStorage.setItem(
-      this.storageKey(accountId),
-      JSON.stringify(notifications)
+  private applyRead(matches: (notification: FornectNotification) => boolean): void {
+    this.items.update((notifications) =>
+      notifications.map((notification) =>
+        matches(notification) ? { ...notification, read: true } : notification,
+      ),
     );
   }
+}
 
-  private createDemoNotifications(
-    accountId: string
-  ): FornectNotification[] {
-    if (accountId === 'account-demo-001') {
-      // Obavjestenje o uredjaju van mreze se vise ne pise
-      // rucno - syncOfflineAlerts ga izvodi iz stvarnog stanja.
-      return [
-        {
-          id: 'update-1',
-          type: 'update',
-          titleKey: 'notifications.updateAvailable',
-          messageKey: 'notifications.updateReady',
-          timeKey: 'notifications.time1Hour',
-          read: false
-        },
-        {
-          id: 'protection-1',
-          type: 'protection',
-          titleKey: 'notifications.protectionActivity',
-          messageKey: 'notifications.adsBlocked',
-          timeKey: 'notifications.today',
-          read: true
-        }
-      ];
-    }
+export interface NotificationTimeLabel {
+  key: string;
+  params: Record<string, string | number>;
+}
 
-    return [
-      {
-        id: 'welcome-1',
-        type: 'protection',
-        titleKey: 'notifications.protectionActive',
-        messageKey: 'notifications.networkProtected',
-        timeKey: 'notifications.today',
-        read: false
-      },
-      {
-        id: 'update-1',
-        type: 'update',
-        titleKey: 'notifications.upToDate',
-        messageKey: 'notifications.runningNormally',
-        timeKey: 'notifications.today',
-        read: true
-      }
-    ];
+/**
+ * Kada se obavještenje desilo.
+ *
+ * Ranije je vrijeme bilo dio teksta, ručno upisano ("prije 1 sat") i
+ * nije se mijenjalo — pisalo je isto i sedmicu kasnije. Sada se računa
+ * iz stvarnog vremena nastanka.
+ *
+ * Za svjež događaj je relativno vrijeme jasnije, a za stariji je tačan
+ * sat ono što roditelja zanima: "napustio mrežu u 23:12" kaže više od
+ * "prije 9 sati".
+ */
+export function notificationTimeLabel(
+  createdAt: string,
+  now: Date = new Date(),
+): NotificationTimeLabel {
+  const at = new Date(createdAt);
+
+  if (Number.isNaN(at.getTime())) {
+    return { key: 'notifications.justNow', params: {} };
   }
+
+  const minutes = Math.floor((now.getTime() - at.getTime()) / 60_000);
+
+  if (minutes < 1) {
+    return { key: 'notifications.justNow', params: {} };
+  }
+
+  if (minutes < 60) {
+    return { key: 'notifications.minutesAgo', params: { minutes } };
+  }
+
+  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+
+  if (isSameDay(at, now)) {
+    return { key: 'notifications.todayAt', params: { time } };
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  if (isSameDay(at, yesterday)) {
+    return { key: 'notifications.yesterdayAt', params: { time } };
+  }
+
+  return {
+    key: 'notifications.onDateAt',
+    params: { date: `${pad(at.getDate())}.${pad(at.getMonth() + 1)}.`, time },
+  };
+}
+
+function isSameDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function pad(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function fromApiRow(row: NotificationApiRow): FornectNotification {
+  return {
+    id: row.id,
+    type: row.type,
+    titleKey: row.title_key,
+    messageKey: row.message_key,
+    params: row.params ?? undefined,
+    read: row.read_at !== null,
+    createdAt: row.created_at,
+  };
 }

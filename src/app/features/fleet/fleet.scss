@@ -1,0 +1,308 @@
+// Fleet / OTA. Namjerno bez vlastitih varijanti .topbar/.eyebrow — te
+// klase su već definisane po komponentama 17 odnosno 16 puta (nalaz iz
+// 1.6). Ovdje se koriste iste vrijednosti, da se ne doda osamnaesta.
+
+.fleet-page {
+  padding: 1.5rem;
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+
+  h1 {
+    margin: 0.25rem 0;
+    font-size: 1.5rem;
+  }
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--muted, #6b7280);
+}
+
+.subtitle,
+.hint,
+.muted {
+  color: var(--muted, #6b7280);
+  font-size: 0.875rem;
+  margin: 0.25rem 0;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.125rem;
+  }
+}
+
+.card--locked {
+  background: var(--surface-muted, #f9fafb);
+}
+
+.hub-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge--paused {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.block {
+  border-top: 1px solid var(--border, #e5e7eb);
+  margin-top: 1rem;
+  padding-top: 1rem;
+
+  h3 {
+    margin: 0 0 0.25rem;
+    font-size: 0.9375rem;
+  }
+}
+
+.versions {
+  margin: 0.5rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.5rem;
+
+  div {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.625rem;
+  }
+
+  dt {
+    font-size: 0.8125rem;
+    color: var(--muted, #6b7280);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+}
+
+// Sve što čeka uređaj izgleda isto, da se na prvi pogled razlikuje od
+// podatka koji stvarno postoji.
+.pending {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted, #6b7280);
+  font-style: italic;
+}
+
+.rings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.ring {
+  border: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  border-radius: 999px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.ring--active {
+  border-color: var(--accent, #f5821f);
+  background: var(--accent, #f5821f);
+  color: #fff;
+  font-weight: 600;
+}
+
+.window {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+  }
+
+  input {
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+
+  input,
+  textarea {
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    font: inherit;
+  }
+
+  textarea {
+    font-family: ui-monospace, monospace;
+    font-size: 0.75rem;
+    resize: vertical;
+  }
+
+  small {
+    color: var(--muted, #6b7280);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.primary-button,
+.back-button,
+.danger-button {
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.primary-button {
+  background: var(--accent, #f5821f);
+  color: #fff;
+}
+
+.back-button {
+  background: transparent;
+  border-color: var(--border, #e5e7eb);
+}
+
+.danger-button {
+  background: transparent;
+  border-color: #dc2626;
+  color: #dc2626;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-color: var(--border, #e5e7eb);
+    color: var(--muted, #6b7280);
+  }
+}
+
+.warning {
+  margin-top: 0.75rem;
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8125rem;
+
+  p {
+    margin: 0 0 0.25rem;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 1.125rem;
+    word-break: break-all;
+  }
+}
+
+.error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.ok,
+.ok-inline {
+  color: #047857;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.list-label {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.block--delivery {
+  border-top-style: dashed;
+}
+
+.field select {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  font: inherit;
+  background: var(--surface, #fff);
+}
+
+.group-results {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+
+  li {
+    padding: 0.5rem 0.625rem;
+    border-left: 3px solid #047857;
+    background: var(--surface-muted, #f9fafb);
+    margin-bottom: 0.375rem;
+  }
+
+  // Preskočeni se moraju isticati: o njima se poslije incidenta pita.
+  li.skipped {
+    border-left-color: #d97706;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}

@@ -65,6 +65,22 @@
   <main class="dashboard-content">
     <app-connection-banner />
 
+    @if (unclassifiedCount > 0) {
+      <a class="new-devices-banner" routerLink="/new-devices">
+        <span class="new-devices-count">{{ unclassifiedCount }}</span>
+
+        <span class="new-devices-text">
+          <strong>
+            {{ 'newDevices.bannerTitle' | translate }}
+          </strong>
+
+          <small>
+            {{ 'newDevices.bannerBody' | translate }}
+          </small>
+        </span>
+      </a>
+    }
+
     <section class="hero">
       <div>
         <p class="eyebrow">

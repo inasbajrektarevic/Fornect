@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -35,6 +35,9 @@ type ReportFormat = 'pdf' | 'csv';
 })
 export class ProAgency {
   private readonly authService = inject(AuthService);
+  // Tajmer ispod mijenja obicno polje van klika; bez zone.js to ne
+  // osvjezava ekran samo, pa poruka ne bi nestala.
+  private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly languageService = inject(LanguageService);
 
   // POC: samo metapodaci, bez uvida u privatan sadržaj.
@@ -90,6 +93,7 @@ export class ProAgency {
 
     window.setTimeout(() => {
       this.reportMessage = '';
+      this.changeDetector.markForCheck();
     }, 3000);
   }
 
@@ -103,6 +107,7 @@ export class ProAgency {
 
     window.setTimeout(() => {
       this.alarmsSaved = false;
+      this.changeDetector.markForCheck();
     }, 2000);
   }
 

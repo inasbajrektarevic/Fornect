@@ -100,9 +100,9 @@
           />
         </div>
 
-        @if (errorMessageKey) {
+        @if (errorMessageKey()) {
           <div class="error-message">
-            {{ errorMessageKey | translate }}
+            {{ errorMessageKey() | translate }}
           </div>
         }
 

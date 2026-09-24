@@ -31,15 +31,15 @@
           <h2>
             {{ 'notifications.title' | translate }}
 
-            @if (unreadCount > 0) {
+            @if (unreadCount() > 0) {
               <span class="unread-count">
-                {{ unreadCount }}
+                {{ unreadCount() }}
               </span>
             }
           </h2>
         </div>
 
-        @if (unreadCount > 0) {
+        @if (unreadCount() > 0) {
           <button
             type="button"
             class="mark-all-button"
@@ -50,9 +50,21 @@
         }
       </div>
 
+      @if (notifications().length === 0) {
+        <div class="notifications-empty">
+          <h3>
+            {{ 'notifications.emptyTitle' | translate }}
+          </h3>
+
+          <p>
+            {{ 'notifications.emptyMessage' | translate }}
+          </p>
+        </div>
+      }
+
       <div class="notification-list">
         @for (
-          notification of notifications;
+          notification of notifications();
           track notification.id
         ) {
           <article
@@ -74,6 +86,12 @@
               "
               [class.notification-icon--capacity]="
                 notification.type === 'capacity'
+              "
+              [class.notification-icon--new-device]="
+                notification.type === 'new-device'
+              "
+              [class.notification-icon--consent]="
+                notification.type === 'consent'
               ">
 
               @switch (notification.type) {
@@ -91,6 +109,14 @@
 
                 @case ('capacity') {
                   ⚠
+                }
+
+                @case ('new-device') {
+                  ?
+                }
+
+                @case ('consent') {
+                  !
                 }
               }
             </div>
@@ -117,7 +143,10 @@
               </p>
 
               <span class="notification-time">
-                {{ notification.timeKey | translate }}
+                {{
+                  notification.time.key
+                    | translate:notification.time.params
+                }}
               </span>
             </div>
 

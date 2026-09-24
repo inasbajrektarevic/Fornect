@@ -195,6 +195,19 @@
   color: #92400e;
 }
 
+// Nov uređaj je pitanje, ne uzbuna — plavo, ne crveno.
+.notification-icon--new-device {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+// Pristanak koji nije prošao jeste uzbuna: čovjek misli da je
+// zaštićen, a nije.
+.notification-icon--consent {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 @media (max-width: 650px) {
   .topbar {
     padding: 22px 18px;
@@ -226,4 +239,24 @@
   .read-button {
     min-height: 44px;
   }
+}
+
+/* Prazna lista nije greška nego uobičajeno stanje: obavještenje
+   nastaje samo kad se nešto stvarno desi. Zato ima svoj tekst,
+   umjesto praznog prostora koji izgleda kao da se nešto nije
+   učitalo. */
+.notifications-empty {
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.notifications-empty h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.notifications-empty p {
+  margin: 0;
+  color: var(--fn-muted);
+  line-height: 1.6;
 }

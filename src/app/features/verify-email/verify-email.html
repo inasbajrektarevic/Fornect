@@ -57,20 +57,15 @@
             />
           </div>
 
-          <p class="poc-hint">
-            {{ 'verify.pocCode' | translate }}
-            <strong>123456</strong>
-          </p>
-
-          @if (errorMessageKey) {
+          @if (errorMessage) {
             <div class="error-message">
-              {{ errorMessageKey | translate }}
+              {{ errorMessage }}
             </div>
           }
 
-          @if (successMessageKey) {
+          @if (successMessage) {
             <div class="success-message">
-              {{ successMessageKey | translate }}
+              {{ successMessage }}
             </div>
           }
 

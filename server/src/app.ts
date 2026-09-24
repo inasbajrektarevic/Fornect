@@ -6,10 +6,15 @@ import './types';
 import { authenticateAccount } from './plugins/authenticate-account';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
+import { consentRoutes } from './routes/consent';
+import { deviceEventRoutes } from './routes/device-events';
 import { deviceRoutes } from './routes/devices';
+import { fleetRoutes } from './routes/fleet';
 import { healthRoutes } from './routes/health';
 import { hubRoutes } from './routes/hub';
 import { networkDeviceRoutes } from './routes/network-devices';
+import { notificationRoutes } from './routes/notifications';
+import { portalBundleRoutes, portalSettingsRoutes } from './routes/portal-settings';
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -30,6 +35,14 @@ export function buildApp() {
   // Uređaji (Orange Pi agent) — Bearer token autentifikacija po ruti.
   app.register(deviceRoutes, { prefix: '/api/v1/devices' });
 
+  // Eventi koje hub šalje ka cloud-u (Zadatak 1, Tačka 5). Isti
+  // prefiks i ista device autentifikacija; odvojen fajl jer je to
+  // zaseban kontrakt, ne još jedna operacija nad uređajem.
+  app.register(deviceEventRoutes, { prefix: '/api/v1/devices' });
+
+  // Hub povlači tekst i brend portala (stavka 1.2).
+  app.register(portalBundleRoutes, { prefix: '/api/v1/devices' });
+
   // Interni admin panel — X-Admin-Key.
   app.register(adminRoutes, { prefix: '/api/v1/admin' });
 
@@ -44,7 +57,18 @@ export function buildApp() {
       appScope.addHook('preHandler', authenticateAccount);
 
       appScope.register(networkDeviceRoutes, { prefix: '/network-devices' });
+      appScope.register(notificationRoutes, { prefix: '/notifications' });
+      appScope.register(portalSettingsRoutes);
       appScope.register(hubRoutes);
+
+      // Fleet / OTA (Zadatak 1, Tačka 6). Bez prefiksa, kao i hub rute:
+      // pune putanje su /fleet i /fleet/:id/...
+      appScope.register(fleetRoutes);
+
+      // Pristanak na presretanje. Bez prefiksa, jer sam definiše pune
+      // putanje (/consent-records, /network-devices/:id/consent...) —
+      // dio ruta visi ispod uređaja, a dio je na nivou naloga.
+      appScope.register(consentRoutes);
     },
     { prefix: '/api/v1/app' },
   );

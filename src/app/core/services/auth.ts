@@ -85,6 +85,11 @@ export class AuthService {
           name: trimmedName,
           email: normalizedEmail,
           password,
+          // Server po ovoj zoni računa da li je uređaj napustio mrežu
+          // "u vrijeme rasporeda". Bez nje bi računao po svom vremenu
+          // (produkcija je u UTC-u) i noćni odlazak u 21:30 vidio kao
+          // 19:30, dakle prije početka rasporeda.
+          timezone: detectTimeZone(),
         }),
       );
     } catch (error) {
@@ -116,6 +121,31 @@ export class AuthService {
     sessionStorage.setItem(this.pendingRegistrationKey, JSON.stringify(pending));
 
     sessionStorage.removeItem('fornect-email-verified');
+  }
+
+  /**
+   * Potvrda email adrese kodom koji je server poslao na mail.
+   *
+   * Kod se provjerava NA SERVERU — ranije je bio zakucan u frontendu
+   * (123456), pa je provjera bila samo privid: bilo ko je mogao
+   * "potvrditi" bilo koju adresu.
+   */
+  async verifyEmail(email: string, code: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${API_BASE_URL}/auth/verify-email`, {
+        email: email.trim().toLowerCase(),
+        code: code.trim(),
+      }),
+    );
+  }
+
+  /** Novi kod na istu adresu. Server ograničava koliko često. */
+  async resendVerification(email: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${API_BASE_URL}/auth/resend-verification`, {
+        email: email.trim().toLowerCase(),
+      }),
+    );
   }
 
   completeRegistration(): boolean {
@@ -208,4 +238,13 @@ function isHttpStatus(error: unknown, status: number): boolean {
     'status' in error &&
     (error as { status?: number }).status === status
   );
+}
+
+/** IANA zona pregledača, sa padom nazad ako je okruženje ne zna. */
+function detectTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Sarajevo';
+  } catch {
+    return 'Europe/Sarajevo';
+  }
 }

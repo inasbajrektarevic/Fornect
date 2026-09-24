@@ -10,7 +10,18 @@ export type { DayWindow, DeviceSchedule, ScheduleDay, ScheduleMode } from './sch
 
 export type DeviceProfile = 'Child' | 'Teen' | 'Adult' | 'Admin' | null;
 export type ProtectionLevel = 'standard' | 'full' | 'needs-setup';
-export type PairingState = 'unpaired' | 'pairing' | 'paired' | 'failed';
+/**
+ * `guest` je uređaj za koji je vlasnik svjesno izabrao samo osnovnu
+ * zaštitu, ili kojem je pristanak opozvan. Razlikuje se od `unpaired`,
+ * koji znači "još niko nije odlučio" — uređaj u tom stanju na mreži
+ * dobija poziv kroz captive portal, a gost ne dobija ništa.
+ */
+export type PairingState =
+  | 'unpaired'
+  | 'guest'
+  | 'pairing'
+  | 'paired'
+  | 'failed';
 
 export interface DeviceRestrictions {
   blockAdultContent: boolean;
@@ -55,6 +66,21 @@ export interface FornectNetworkDevice {
   restrictions?: DeviceRestrictions;
   alertWhenOffline?: boolean;
   schedule: DeviceSchedule;
+  /**
+   * Kad je uređaj prvi put zaveden. Do trenutka kad hub bude
+   * prijavljivao stvarno vrijeme pojavljivanja na mreži, ovo je
+   * najbliže tome što imamo — koristi ga red "Novi uređaji".
+   */
+  createdAt?: string;
+  /**
+   * Da li je uređaj izvan onoga što licenca hub-a pokriva. Računa ga
+   * server pri čitanju liste, po redoslijedu pojavljivanja — panel ga
+   * samo prikazuje. Nalog bez uparenog hub-a nema licencu, pa nema ni
+   * prekoračenja.
+   */
+  overCapacity?: boolean;
+  /** Koje je po redu mjesto uređaj zauzeo (1 = prvi zavedeni). */
+  licenceSlot?: number;
 }
 
 interface NetworkDeviceApiRow {
@@ -73,6 +99,9 @@ interface NetworkDeviceApiRow {
   restrictions: DeviceRestrictions | null;
   alert_when_offline: boolean | null;
   schedule: DeviceSchedule | null;
+  created_at: string;
+  over_capacity?: boolean;
+  licence_slot?: number;
 }
 
 // Polja koja backend ne poznaje uopšte (nema ih u network_devices
@@ -155,6 +184,55 @@ export class DeviceService {
    */
   ensureLoaded(): Promise<void> {
     return this.loadPromise;
+  }
+
+  /**
+   * Uređaji koje niko još nije klasifikovao — ni kao goste, ni kao
+   * uparene. To je red "Novi uređaji" iz Zadatka 1, Tačke 5: mjesto
+   * na kojem vlasnik primijeti uređaj koji ne prepoznaje.
+   *
+   * `unpaired` ovdje znači "niko još nije odlučio". Uređaj kojem je
+   * vlasnik svjesno izabrao osnovnu zaštitu je `guest` i više se ne
+   * pojavljuje kao pitanje.
+   */
+  readonly unclassifiedDevices = computed(() =>
+    this.devices().filter((device) => device.pairingState === 'unpaired'),
+  );
+
+  /**
+   * Uređaji koje licenca hub-a više ne pokriva.
+   *
+   * Do sada je panel granicu računao sam, iz zakucane vrijednosti koja
+   * je postojala i kad nalog nema nijedan hub — dakle izmišljao je
+   * limit. Sada je izvor istine hub: nema hub-a, nema ni limita.
+   */
+  readonly overCapacityDevices = computed(() =>
+    this.devices().filter((device) => device.overCapacity === true),
+  );
+
+  /**
+   * Svrstavanje među goste: osnovna (DNS) zaštita, bez presretanja.
+   *
+   * Puna zaštita se odavde NE može dodijeliti — ona traži izričit
+   * pristanak, pa ide kroz ekran zaštite tog uređaja.
+   */
+  markAsGuest(id: string): void {
+    this.updateDevice(id, {
+      pairingState: 'guest',
+      useFullProtection: false,
+      protectionLevel: 'standard',
+    });
+  }
+
+  /**
+   * Ponovo učitava uređaje sa servera i vraća promise, za razliku od
+   * syncWithCurrentAccount() koji ga guta. Potrebno nakon radnji koje
+   * stanje uređaja mijenjaju NA SERVERU — npr. tok pristanka, gdje
+   * backend sam prebacuje pairing_state — jer lokalna kopija tada
+   * ostaje zastarjela i ekran bi prikazao staro stanje.
+   */
+  reload(): Promise<void> {
+    return this.loadFromApi();
   }
 
   discoverDemoDevicesForCurrentAccount(): void {
@@ -479,6 +557,9 @@ export class DeviceService {
       restrictions: row.restrictions ?? undefined,
       alertWhenOffline: row.alert_when_offline ?? undefined,
       schedule: normalizeSchedule(row.schedule) ?? this.defaultSchedule,
+      createdAt: row.created_at,
+      overCapacity: row.over_capacity === true,
+      licenceSlot: row.licence_slot,
       ...this.loadLocalOnlyFields(row.id),
     };
   }

@@ -1,4 +1,4 @@
-﻿import { Component, inject } from '@angular/core';
+﻿import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -33,6 +33,9 @@ interface AccountPreferences {
 })
 export class Settings {
   private readonly authService = inject(AuthService);
+  // Tajmer ispod mijenja obicno polje van klika; bez zone.js to ne
+  // osvjezava ekran samo, pa poruka ne bi nestala.
+  private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly connectionService =
     inject(ConnectionService);
   private readonly hubService = inject(HubService);
@@ -132,6 +135,7 @@ export class Settings {
 
     window.setTimeout(() => {
       this.saved = false;
+      this.changeDetector.markForCheck();
     }, 2000);
   }
 
