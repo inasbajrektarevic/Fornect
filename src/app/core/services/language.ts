@@ -475,7 +475,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'deviceSetup.fullProtection':
       'Puna zaštita',
     'deviceSetup.fullDescription':
-      'Uz zaštitni profil — 70–85% zahtjeva, ali nikad sve',
+      'Uz zaštitni profil — 70–85% zahtjeva, ali nikad sve. Traži pristanak i instalaciju profila, kroz koje vas vodimo odmah nakon ovog koraka.',
 
     'deviceSetup.cancel': 'Odustani',
     'deviceSetup.finish': 'Završi podešavanje',
@@ -843,7 +843,6 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Poslali smo šestocifreni kod za potvrdu na',
     'verify.yourEmail': 'vašu email adresu',
     'verify.code': 'Kod za potvrdu',
-    'verify.pocCode': 'POC kod za potvrdu:',
     'verify.enterCode': 'Unesite kod iz emaila.',
     'verify.resendFailed':
       'Slanje novog koda nije uspjelo. Pokušajte ponovo za koji trenutak.',
@@ -1635,7 +1634,7 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'deviceSetup.fullProtection':
       'Full Protection',
     'deviceSetup.fullDescription':
-      'With the protection profile — 70–85% of requests, but never all',
+      'With the protection profile — 70–85% of requests, but never all. Needs consent and the profile installed; we take you through both right after this step.',
 
     'deviceSetup.cancel': 'Cancel',
     'deviceSetup.finish': 'Finish setup',
@@ -2001,7 +2000,6 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'We sent a 6-digit verification code to',
     'verify.yourEmail': 'your email address',
     'verify.code': 'Verification code',
-    'verify.pocCode': 'POC verification code:',
     'verify.enterCode': 'Enter the code from the email.',
     'verify.resendFailed':
       'Sending a new code failed. Try again in a moment.',

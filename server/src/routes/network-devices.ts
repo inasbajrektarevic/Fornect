@@ -95,6 +95,18 @@ const PATCHABLE_FIELDS = [
 
 const JSONB_FIELDS = new Set(['restrictions', 'schedule']);
 
+// Puna zastita znaci da uredjaj presrece saobracaj, a to smije samo uz
+// pristanak i dokazano instaliran zastitni profil. Taj put vodi server
+// (consent-actions.ts: pristanak -> provjera -> 'paired' + 'full'). Panel
+// nivo moze VRATITI na punu kad je profil vec tu (spustio je na
+// standardnu, pa predomislio se), ali je ne moze proglasiti bez njega.
+// Ranije je podesavanje novog uredjaja upisivalo 'full' odmah, pa je
+// kartica uredjaja pisala "Puna zastita" za uredjaj bez certifikata.
+const FULL_NEEDS_PROFILE = {
+  error: 'Puna zaštita traži pristanak i instaliran zaštitni profil.',
+  code: 'full-protection-needs-profile',
+};
+
 export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get('/', async (request, reply) => {
     const client = await pool.connect();
@@ -149,6 +161,10 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
 
     if (!body.mac_address || !body.name) {
       return reply.code(400).send({ error: 'mac_address i name su obavezni.' });
+    }
+
+    if (body.protection_level === 'full' && body.pairing_state !== 'paired') {
+      return reply.code(400).send(FULL_NEEDS_PROFILE);
     }
 
     // Isti oblik kao sa huba (services/mac.ts). Bez ovoga je uređaj koji
@@ -270,6 +286,13 @@ export async function networkDeviceRoutes(fastify: FastifyInstance): Promise<voi
       );
 
       const after = rows[0]!;
+
+      // Provjerava se samo kad zahtjev TRAZI punu. Zatecena 'full' uz
+      // drugo stanje ne smije blokirati npr. preimenovanje.
+      if (body.protection_level === 'full' && after.pairing_state !== 'paired') {
+        await client.query('ROLLBACK');
+        return reply.code(400).send(FULL_NEEDS_PROFILE);
+      }
 
       await syncIfPairingChanged(client, before, after);
 

@@ -84,6 +84,15 @@ export class Protection {
 
   constructor() {
     void this.loadConsent();
+
+    // Dolazak iz podesavanja novog uredjaja sa izabranom punom
+    // zastitom: forma pristanka je sljedeci korak, pa se otvara odmah.
+    if (
+      this.route.snapshot.queryParamMap.get('consent') === 'start' &&
+      !this.certificateInstalled
+    ) {
+      this.openConsentForm();
+    }
   }
 
   // ---------------------------------------------------------------

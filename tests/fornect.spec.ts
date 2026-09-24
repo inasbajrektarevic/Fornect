@@ -673,6 +673,11 @@ test('14 - registration survives an interrupted pairing step', async ({ page }) 
 
   await expect(page).toHaveURL(/\/verify-email$/);
 
+  // Ekran ne smije nuditi kod. Stari zakucani "POC kod: 123456" ostao
+  // je na ekranu i poslije prelaska na pravi kod sa servera, pa je
+  // korisnika slao na kod koji server odbija.
+  await expect(page.getByText('POC verification code')).toHaveCount(0);
+
   const code = await readVerificationCode(email);
 
   await page.getByLabel('Verification code').fill(code);
@@ -2106,4 +2111,46 @@ test('38 - the pairing screen shows the answer without a second click', async ({
   await pairButton.click();
 
   await expect(page.getByRole('heading', { name: 'Fornect Home is connected' })).toBeVisible();
+});
+
+// Puna zastita izabrana pri podesavanju novog uredjaja se TRAZI, ne
+// ukljucuje. Ranije se upisivala odmah: kartica je pisala "Puna
+// zastita", a ekran zastite "Standardna", jer certifikata nije bilo
+// (prijavio Inas, 24.09). Tacan je bio ekran zastite.
+test('39 - choosing full protection at setup leads to consent, it does not switch it on', async ({
+  page,
+}) => {
+  const seeded = await login(page);
+  const deviceId = seeded.deviceIds.unknown;
+
+  await page.goto('/devices');
+
+  await page.getByRole('button', { name: 'Set up' }).click();
+
+  await page.getByPlaceholder("e.g. Amina's tablet").fill('Tablet');
+  await page.getByRole('button', { name: /Teen/ }).click();
+  await page.getByRole('button', { name: /Full Protection/ }).click();
+  await page.getByRole('button', { name: 'Finish setup' }).click();
+
+  // Sljedeci korak je pristanak, ne gotova puna zastita.
+  await expect(page).toHaveURL(new RegExp(`/devices/${deviceId}/protection\\?consent=start$`));
+  await expect(page.getByRole('heading', { name: 'Consent to full protection' })).toBeVisible();
+
+  const { token } = await apiLogin(page, seeded.email);
+  const headers = { Authorization: `Bearer ${token}` };
+
+  const list = await page.request.get('/api/v1/app/network-devices', { headers });
+  const device = (await list.json()).find((row: { id: string }) => row.id === deviceId);
+
+  expect(device.protection_level).toBe('standard');
+  expect(device.use_full_protection).toBe(true);
+
+  // Ni API ne prima punu zastitu bez instaliranog profila.
+  const forced = await page.request.patch(`/api/v1/app/network-devices/${deviceId}`, {
+    headers,
+    data: { protection_level: 'full' },
+  });
+
+  expect(forced.status()).toBe(400);
+  expect((await forced.json()).code).toBe('full-protection-needs-profile');
 });

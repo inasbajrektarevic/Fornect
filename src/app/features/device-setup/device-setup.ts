@@ -62,11 +62,20 @@ export class DeviceSetup {
 
     const name = this.deviceName.trim();
 
+    // Puna zastita se ovdje samo TRAZI, ne ukljucuje. Ukljucuje je
+    // server tek kad postoji pristanak i kad uredjaj dokaze da je
+    // zastitni profil instaliran (consent-actions.ts). Ranije se
+    // 'full' upisivao odmah: kartica uredjaja je pisala "Puna zastita",
+    // a ekran zastite, koji gleda certifikat, "Standardna" - i tacan
+    // je bio ekran zastite.
+    const wantsFull = this.protectionLevel === 'full';
+
     const setupData = {
       id: this.deviceId,
       name,
       profile: this.selectedProfile,
-      protectionLevel: this.protectionLevel
+      protectionLevel: 'standard' as const,
+      useFullProtection: wantsFull
     };
 
     localStorage.setItem(
@@ -79,9 +88,21 @@ export class DeviceSetup {
       {
         name,
         profile: this.selectedProfile,
-        protectionLevel: this.protectionLevel
+        protectionLevel: 'standard',
+        useFullProtection: wantsFull
       }
     );
+
+    if (wantsFull) {
+      // Pravo na sljedeci korak: forma pristanka, pa instalacija
+      // profila. Isti tok kao izbor pune zastite na ekranu zastite.
+      this.router.navigate(
+        ['/devices', this.deviceId, 'protection'],
+        { queryParams: { consent: 'start' } }
+      );
+
+      return;
+    }
 
     this.router.navigate([
       '/devices',

@@ -159,11 +159,15 @@ export async function grantConsent(
 
   // Uređaj ulazi u 'pairing': korisnik je pristao, ali još nije
   // dokazao da certifikat radi. Puna zaštita se NE uključuje ovdje —
-  // tek nakon uspješne provjere.
+  // tek nakon uspješne provjere. Ako je bila uključena (ponovni
+  // pristanak na uređaju koji je bio 'paired'), spušta se: uređaj
+  // izlazi iz consented_macs, pa bi "Puna zaštita" na kartici bila laž.
   await client.query(
     `UPDATE network_devices
      SET pairing_state = 'pairing',
          use_full_protection = true,
+         protection_level = CASE WHEN protection_level = 'full'
+                                 THEN 'standard' ELSE protection_level END,
          policy_version = $2
      WHERE id = $1`,
     [device.id, CONSENT_POLICY_VERSION],
@@ -246,9 +250,16 @@ export async function verifyConsent(
     // 'failed' je namjerno različito od 'unpaired': korisnik jeste dao
     // pristanak, samo instalacija nije prošla — panel na osnovu toga
     // nudi pomoć umjesto da vrati na početak.
-    await client.query(`UPDATE network_devices SET pairing_state = 'failed' WHERE id = $1`, [
-      device.id,
-    ]);
+    // Nivo se spušta iz istog razloga kao kod ponovnog pristanka:
+    // uređaj koji nije 'paired' ne presreće, pa nije ni na punoj.
+    await client.query(
+      `UPDATE network_devices
+       SET pairing_state = 'failed',
+           protection_level = CASE WHEN protection_level = 'full'
+                                   THEN 'standard' ELSE protection_level END
+       WHERE id = $1`,
+      [device.id],
+    );
 
     // Čovjek je pristao i mislio da je gotovo. Bez ovoga ostaje u
     // uvjerenju da je puna zaštita uključena, a nije.
