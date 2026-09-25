@@ -14,9 +14,18 @@
 -- to je stvaran rizik preuzimanja naloga. Sa pet kodova dnevno ostaje
 -- 25 pogadjanja.
 --
--- `password_changed_at`: tokeni izdati PRIJE promjene lozinke vise ne
--- vrijede (vidi plugins/authenticate-account.ts). Bez toga bi neko ko
--- vec drzi token ostao prijavljen 30 dana i poslije reseta.
+-- `password_version`: raste sa svakom promjenom lozinke i upisuje se u
+-- token. Token sa starijom verzijom vise ne vrijedi (vidi
+-- plugins/authenticate-account.ts). Bez toga bi neko ko vec drzi token
+-- ostao prijavljen 30 dana i poslije reseta.
+--
+-- Verzija, a ne vrijeme promjene: `iat` u tokenu je u sekundama, pa bi
+-- token izdat u istoj sekundi kad je lozinka promijenjena prosao.
+-- Postojeci tokeni nemaju verziju i vaze kao 0 — ne izbacuje se niko
+-- dok ne promijeni lozinku.
+--
+-- `password_changed_at` je samo zapis, za podrsku: "kad je lozinka
+-- zadnji put mijenjana".
 
 ALTER TABLE accounts
   ADD COLUMN password_reset_code_hash text,
@@ -25,4 +34,5 @@ ALTER TABLE accounts
   ADD COLUMN password_reset_sent_at timestamptz,
   ADD COLUMN password_reset_window_started_at timestamptz,
   ADD COLUMN password_reset_requests integer NOT NULL DEFAULT 0,
+  ADD COLUMN password_version integer NOT NULL DEFAULT 0,
   ADD COLUMN password_changed_at timestamptz;

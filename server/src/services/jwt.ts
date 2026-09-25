@@ -5,12 +5,11 @@ import { env } from '../env';
 export interface AccountTokenPayload {
   sub: string;
   email: string;
-}
-
-/** Ono sto verify vrati: potpisani podaci + `iat` koji doda jsonwebtoken. */
-export interface VerifiedAccountToken extends AccountTokenPayload {
-  /** Kad je token izdat, u sekundama. */
-  iat?: number;
+  /**
+   * Verzija lozinke u trenutku izdavanja (accounts.password_version).
+   * Tokeni izdati prije migracije 021 je nemaju — vaze kao 0.
+   */
+  pwv?: number;
 }
 
 export function signAccountToken(payload: AccountTokenPayload): string {
@@ -19,6 +18,6 @@ export function signAccountToken(payload: AccountTokenPayload): string {
   });
 }
 
-export function verifyAccountToken(token: string): VerifiedAccountToken {
-  return jwt.verify(token, env.jwtSecret) as VerifiedAccountToken;
+export function verifyAccountToken(token: string): AccountTokenPayload {
+  return jwt.verify(token, env.jwtSecret) as AccountTokenPayload;
 }

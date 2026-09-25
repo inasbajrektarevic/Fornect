@@ -32,8 +32,8 @@ export async function authenticateAccount(
   // a to je cesto upravo razlog reseta. Isto vazi i za obrisan nalog.
   //
   // Cijena je jedan upit po zahtjevu, po primarnom kljucu.
-  const { rows } = await pool.query<{ password_changed_at: Date | null }>(
-    'SELECT password_changed_at FROM accounts WHERE id = $1',
+  const { rows } = await pool.query<{ password_version: number }>(
+    'SELECT password_version FROM accounts WHERE id = $1',
     [payload.sub],
   );
 
@@ -43,17 +43,10 @@ export async function authenticateAccount(
     return reply.code(401).send({ error: 'Nevažeći ili istekao token.' });
   }
 
-  // `iat` je u sekundama, pa se trenutak promjene zaokruzuje nadolje.
-  // Token izdat u istoj sekundi kad je lozinka promijenjena (prijava
-  // odmah poslije reseta) mora ostati vazeci.
-  if (account.password_changed_at && payload.iat !== undefined) {
-    const changedAtSeconds = Math.floor(new Date(account.password_changed_at).getTime() / 1000);
-
-    if (payload.iat < changedAtSeconds) {
-      return reply
-        .code(401)
-        .send({ error: 'Lozinka je promijenjena. Prijavite se ponovo.' });
-    }
+  // Tokeni izdati prije migracije 021 nemaju verziju: vaze kao 0, pa
+  // niko nije izbacen dok ne promijeni lozinku.
+  if ((payload.pwv ?? 0) !== account.password_version) {
+    return reply.code(401).send({ error: 'Lozinka je promijenjena. Prijavite se ponovo.' });
   }
 
   request.accountId = payload.sub;

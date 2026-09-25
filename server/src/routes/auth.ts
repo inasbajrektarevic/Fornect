@@ -395,6 +395,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     const { rowCount } = await pool.query(
       `UPDATE accounts
        SET password_hash = $3,
+           password_version = password_version + 1,
            password_changed_at = now(),
            password_reset_code_hash = NULL,
            password_reset_expires_at = NULL,
@@ -444,7 +445,11 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
 
-    const token = signAccountToken({ sub: account.id, email: account.email });
+    const token = signAccountToken({
+      sub: account.id,
+      email: account.email,
+      pwv: account.password_version,
+    });
 
     return reply.send({ token, account: toPublicAccount(account) });
   });

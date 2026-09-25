@@ -39,7 +39,9 @@ export interface AccountRow {
   password_reset_sent_at: string | null;
   password_reset_window_started_at: string | null;
   password_reset_requests: number;
-  /** Tokeni izdati prije ovog trenutka vise ne vrijede. */
+  /** Raste sa svakom promjenom lozinke; token sa starijom ne vrijedi. */
+  password_version: number;
+  /** Samo zapis — kad je lozinka zadnji put mijenjana. */
   password_changed_at: string | null;
   /** IANA zona naloga; server po njoj računa da li raspored traje. */
   timezone: string;

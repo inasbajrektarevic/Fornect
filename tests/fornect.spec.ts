@@ -2558,7 +2558,9 @@ test('46 - a forgotten password is reset with the code from the email, and old s
 
   // Ekran je do 25.09. bio POC: pisao je "upute su poslane", a nista
   // nije islo ni serveru ni na mail.
-  await page.getByRole('button', { name: 'EN' }).click();
+  //
+  // `exact`: "Send code" sadrzi "en", pa bi obican lokator nasao dva dugmeta.
+  await page.getByRole('button', { name: 'EN', exact: true }).click();
   await page.getByLabel('Email address').fill(email);
   await page.getByRole('button', { name: 'Send code' }).click();
 
