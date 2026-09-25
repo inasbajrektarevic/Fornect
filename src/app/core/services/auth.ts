@@ -148,6 +148,29 @@ export class AuthService {
     );
   }
 
+  /**
+   * Zatraži kod za novu lozinku. Server odgovara isto postojao nalog ili
+   * ne, pa uspjeh ovdje NE znači da je mail poslan.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${API_BASE_URL}/auth/forgot-password`, {
+        email: email.trim().toLowerCase(),
+      }),
+    );
+  }
+
+  /** Nova lozinka uz kod iz maila. Poslije ovoga stari tokeni ne važe. */
+  async resetPassword(email: string, code: string, password: string): Promise<void> {
+    await firstValueFrom(
+      this.http.post(`${API_BASE_URL}/auth/reset-password`, {
+        email: email.trim().toLowerCase(),
+        code: code.trim(),
+        password,
+      }),
+    );
+  }
+
   completeRegistration(): boolean {
     const saved = sessionStorage.getItem(this.pendingRegistrationKey);
 

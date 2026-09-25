@@ -922,22 +922,37 @@ const translations: Record<AppLanguage, Record<string, string>> = {
 
     'forgot.title': 'Zaboravili ste lozinku?',
     'forgot.subtitle':
-      'Unesite svoju email adresu i poslat ćemo vam upute za resetovanje lozinke.',
+      'Unesite email adresu naloga. Poslat ćemo vam šestocifreni kod za postavljanje nove lozinke.',
     'forgot.email': 'Email adresa',
     'forgot.invalidEmail':
       'Unesite ispravnu email adresu.',
-    'forgot.sendResetLink':
-      'Pošalji link za resetovanje',
+    'forgot.sendCode':
+      'Pošalji kod',
     'forgot.backToSignIn':
       '← Nazad na prijavu',
     'forgot.backToSignInButton':
       'Nazad na prijavu',
     'forgot.checkEmail':
       'Provjerite svoj email',
-    'forgot.ifAccountExists':
-      'Ako postoji račun za',
-    'forgot.instructionsSent':
-      'upute za resetovanje lozinke su poslane.',
+    'forgot.codeSentBefore':
+      'Ako postoji nalog za',
+    'forgot.codeSentAfter':
+      ', na tu adresu smo poslali šestocifreni kod. Kod vrijedi 15 minuta. Ako ne stigne za minutu-dvije, provjerite spam ili zatražite novi.',
+    'forgot.code': 'Kod iz maila',
+    'forgot.enterCode': 'Unesite kod iz maila.',
+    'forgot.newPassword': 'Nova lozinka',
+    'forgot.setPassword': 'Postavi novu lozinku',
+    'forgot.resendCode': 'Pošalji novi kod',
+    'forgot.codeResent':
+      'Ako nalog postoji, poslan je novi kod. Novi kod se može tražiti najviše jednom u minuti.',
+    'forgot.changeEmail': 'Promijeni email adresu',
+    'forgot.requestFailed':
+      'Zahtjev nije poslan. Provjerite vezu i pokušajte ponovo.',
+    'forgot.resetFailed':
+      'Lozinka nije promijenjena. Provjerite vezu i pokušajte ponovo.',
+    'forgot.doneTitle': 'Lozinka je promijenjena',
+    'forgot.doneText':
+      'Prijavite se novom lozinkom. Na uređajima na kojima ste bili prijavljeni tražiće se ponovna prijava.',
 
     'schedule.daySun': 'Ned',
     'schedule.dayMon': 'Pon',
@@ -2091,22 +2106,37 @@ const translations: Record<AppLanguage, Record<string, string>> = {
 
     'forgot.title': 'Forgot your password?',
     'forgot.subtitle':
-      'Enter your email address and we will send you instructions to reset your password.',
+      'Enter the email address of your account. We will send you a six-digit code to set a new password.',
     'forgot.email': 'Email address',
     'forgot.invalidEmail':
       'Enter a valid email address.',
-    'forgot.sendResetLink':
-      'Send reset link',
+    'forgot.sendCode':
+      'Send code',
     'forgot.backToSignIn':
       '← Back to sign in',
     'forgot.backToSignInButton':
       'Back to sign in',
     'forgot.checkEmail':
       'Check your email',
-    'forgot.ifAccountExists':
+    'forgot.codeSentBefore':
       'If an account exists for',
-    'forgot.instructionsSent':
-      'password reset instructions have been sent.',
+    'forgot.codeSentAfter':
+      ', we have sent a six-digit code to that address. The code is valid for 15 minutes. If it does not arrive within a minute or two, check your spam folder or request a new one.',
+    'forgot.code': 'Code from the email',
+    'forgot.enterCode': 'Enter the code from the email.',
+    'forgot.newPassword': 'New password',
+    'forgot.setPassword': 'Set new password',
+    'forgot.resendCode': 'Send a new code',
+    'forgot.codeResent':
+      'If the account exists, a new code has been sent. A new code can be requested at most once a minute.',
+    'forgot.changeEmail': 'Change email address',
+    'forgot.requestFailed':
+      'The request was not sent. Check your connection and try again.',
+    'forgot.resetFailed':
+      'The password was not changed. Check your connection and try again.',
+    'forgot.doneTitle': 'Your password has been changed',
+    'forgot.doneText':
+      'Sign in with your new password. Devices where you were signed in will ask you to sign in again.',
 
     'schedule.daySun': 'Sun',
     'schedule.dayMon': 'Mon',

@@ -32,6 +32,15 @@ export interface AccountRow {
   verification_code_expires_at: string | null;
   verification_attempts: number;
   verification_sent_at: string | null;
+  /** sha256 otisak koda za novu lozinku (migracija 021). */
+  password_reset_code_hash: string | null;
+  password_reset_expires_at: string | null;
+  password_reset_attempts: number;
+  password_reset_sent_at: string | null;
+  password_reset_window_started_at: string | null;
+  password_reset_requests: number;
+  /** Tokeni izdati prije ovog trenutka vise ne vrijede. */
+  password_changed_at: string | null;
   /** IANA zona naloga; server po njoj računa da li raspored traje. */
   timezone: string;
   created_at: string;

@@ -58,6 +58,41 @@ async function readVerificationCode(email: string): Promise<string> {
 
 
 
+// Mailovi sa kodom za novu lozinku, najstariji prvi. Filtrira se po
+// naslovu jer isti nalog u outboxu ima i mail za potvrdu adrese — a kod
+// za novu lozinku se salje bez cekanja (vidi /forgot-password), pa u
+// trenutku prvog pogleda najnoviji fajl moze jos biti onaj za potvrdu.
+function passwordResetMails(email: string): { text: string }[] {
+  const safe = email.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+  if (!fs.existsSync(MAIL_OUTBOX)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(MAIL_OUTBOX)
+    .filter((name) => name.includes(safe))
+    .sort()
+    .map((name) => JSON.parse(fs.readFileSync(path.join(MAIL_OUTBOX, name), 'utf8')))
+    .filter((mail: { subject: string }) => mail.subject.includes('novu lozinku'));
+}
+
+async function readPasswordResetCode(email: string): Promise<string> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const mails = passwordResetMails(email);
+    const newest = mails[mails.length - 1];
+    const match = newest ? /\b(\d{6})\b/.exec(newest.text) : null;
+
+    if (match) {
+      return match[1];
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error(`Nema maila sa kodom za novu lozinku za ${email}`);
+}
+
 function uniqueEmail(tag: string): string {
   return `${tag}-${Date.now()}-${Math.floor(Math.random() * 1e8)}@fornect.test`;
 }
@@ -2505,4 +2540,151 @@ test('45 - the home screen does not invent a device the account does not have', 
 
   await expect(page.getByText('v0.1.0')).toHaveCount(0);
   await expect(page.getByText('Just now')).toHaveCount(0);
+});
+
+test('46 - a forgotten password is reset with the code from the email, and old sessions end', async ({
+  page,
+}) => {
+  const email = uniqueEmail('forgot');
+  const newPassword = 'NovaLozinka2026';
+
+  await page.goto('/forgot-password');
+  await registerAccount(page, email);
+
+  const { token: oldToken } = await apiLogin(page, email);
+  const oldHeaders = { Authorization: `Bearer ${oldToken}` };
+
+  expect((await page.request.get('/api/v1/auth/me', { headers: oldHeaders })).status()).toBe(200);
+
+  // Ekran je do 25.09. bio POC: pisao je "upute su poslane", a nista
+  // nije islo ni serveru ni na mail.
+  await page.getByRole('button', { name: 'EN' }).click();
+  await page.getByLabel('Email address').fill(email);
+  await page.getByRole('button', { name: 'Send code' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible();
+
+  const code = await readPasswordResetCode(email);
+  const wrong = code === '000000' ? '111111' : '000000';
+
+  // Pogresan kod: poruka sa servera, na prvi klik (aplikacija bez zone.js).
+  await page.getByLabel('Code from the email').fill(wrong);
+  await page.getByLabel('New password').fill(newPassword);
+  await page.getByLabel('Confirm password').fill(newPassword);
+  await page.getByRole('button', { name: 'Set new password' }).click();
+
+  await expect(page.getByText(/Kod nije ispravan ili je istekao/)).toBeVisible();
+
+  await page.getByLabel('Code from the email').fill(code);
+  await page.getByRole('button', { name: 'Set new password' }).click();
+
+  await expect(
+    page.getByRole('heading', { name: 'Your password has been changed' }),
+  ).toBeVisible();
+
+  // Token izdat prije promjene vise ne vrijedi — inace reset ne bi
+  // izbacio nikoga ko je vec prijavljen, a to je cesto razlog reseta.
+  expect((await page.request.get('/api/v1/auth/me', { headers: oldHeaders })).status()).toBe(401);
+
+  const oldLogin = await page.request.post('/api/v1/auth/login', {
+    data: { email, password: PASSWORD },
+  });
+
+  expect(oldLogin.status()).toBe(401);
+
+  const newLogin = await page.request.post('/api/v1/auth/login', {
+    data: { email, password: newPassword },
+  });
+
+  expect(newLogin.status()).toBe(200);
+
+  const { token: newToken, account } = await newLogin.json();
+
+  // Kod je stigao na ovu adresu, dakle adresa je potvrdjena.
+  expect(account.email_verified).toBe(true);
+
+  expect(
+    (
+      await page.request.get('/api/v1/auth/me', {
+        headers: { Authorization: `Bearer ${newToken}` },
+      })
+    ).status(),
+  ).toBe(200);
+
+  // Iskoristen kod ne vrijedi drugi put.
+  const reuse = await page.request.post('/api/v1/auth/reset-password', {
+    data: { email, code, password: 'TrecaLozinka2026' },
+  });
+
+  expect(reuse.status()).toBe(400);
+});
+
+test('47 - password reset does not reveal accounts, and a code survives only five wrong guesses', async ({
+  page,
+}) => {
+  const email = uniqueEmail('forgot-guess');
+
+  const registered = await page.request.post('/api/v1/auth/register', {
+    data: { name: 'Test User', email, password: PASSWORD },
+  });
+
+  expect(registered.status()).toBe(201);
+
+  // Isti odgovor za postojeci i nepostojeci nalog.
+  const missing = await page.request.post('/api/v1/auth/forgot-password', {
+    data: { email: uniqueEmail('nobody') },
+  });
+
+  const existing = await page.request.post('/api/v1/auth/forgot-password', {
+    data: { email },
+  });
+
+  expect(missing.status()).toBe(200);
+  expect(existing.status()).toBe(200);
+  expect(await missing.json()).toEqual(await existing.json());
+
+  const code = await readPasswordResetCode(email);
+
+  // Drugi zahtjev u istoj minuti: isti odgovor, ali NOVI mail ne ide.
+  // Poruka "sacekajte" bi otkrila da nalog postoji.
+  const again = await page.request.post('/api/v1/auth/forgot-password', { data: { email } });
+
+  expect(again.status()).toBe(200);
+  expect(await again.json()).toEqual(await existing.json());
+
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  expect(passwordResetMails(email)).toHaveLength(1);
+
+  const wrong = code === '000000' ? '111111' : '000000';
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const guess = await page.request.post('/api/v1/auth/reset-password', {
+      data: { email, code: wrong, password: 'NovaLozinka2026' },
+    });
+
+    expect(guess.status()).toBe(400);
+  }
+
+  // Poslije pet promasaja ni ispravan kod ne prolazi.
+  const late = await page.request.post('/api/v1/auth/reset-password', {
+    data: { email, code, password: 'NovaLozinka2026' },
+  });
+
+  expect(late.status()).toBe(400);
+
+  // Lozinka je ostala ista.
+  const login = await page.request.post('/api/v1/auth/login', {
+    data: { email, password: PASSWORD },
+  });
+
+  expect(login.status()).toBe(200);
+
+  // Nepostojeci nalog dobija istu poruku kao iscrpljen kod.
+  const ghost = await page.request.post('/api/v1/auth/reset-password', {
+    data: { email: uniqueEmail('ghost'), code, password: 'NovaLozinka2026' },
+  });
+
+  expect(ghost.status()).toBe(400);
+  expect(await ghost.json()).toEqual(await late.json());
 });

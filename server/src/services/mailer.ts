@@ -118,3 +118,27 @@ export function verificationMail(to: string, code: string, ttlMinutes: number): 
     ].join('\n'),
   };
 }
+
+/**
+ * Tekst maila sa kodom za novu lozinku.
+ *
+ * Kao i kod potvrde: bez linka, kod se prepisuje rucno. Mail kaze sta
+ * se desava ako korisnik nije sam trazio reset — lozinka se ne mijenja
+ * bez koda, pa ne mora nista raditi.
+ */
+export function passwordResetMail(to: string, code: string, ttlMinutes: number): OutgoingMail {
+  return {
+    to,
+    subject: 'Fornect — kod za novu lozinku',
+    text: [
+      'Zatražena je nova lozinka za vaš Fornect nalog. Vaš kod je:',
+      '',
+      `    ${code}`,
+      '',
+      `Kod vrijedi ${ttlMinutes} minuta.`,
+      '',
+      'Ako niste vi tražili novu lozinku, zanemarite ovu poruku —',
+      'bez unosa koda lozinka ostaje ista.',
+    ].join('\n'),
+  };
+}

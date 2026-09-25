@@ -9,7 +9,7 @@ import { env } from '../env';
 import { authenticateAccount } from '../plugins/authenticate-account';
 import { hashPassword, verifyPassword } from '../services/passwords';
 import { signAccountToken } from '../services/jwt';
-import { sendMail, verificationMail } from '../services/mailer';
+import { passwordResetMail, sendMail, verificationMail } from '../services/mailer';
 import { isKnownTimeZone } from '../services/schedule-window';
 
 import {
@@ -20,6 +20,17 @@ import {
   verificationCodeMatches,
   VERIFICATION_CODE_TTL_MINUTES,
 } from '../services/email-verification';
+
+import {
+  generatePasswordResetCode,
+  hashPasswordResetCode,
+  MAX_PASSWORD_RESET_ATTEMPTS,
+  MAX_PASSWORD_RESETS_PER_DAY,
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_RESET_COOLDOWN_SECONDS,
+  PASSWORD_RESET_TTL_MINUTES,
+  passwordResetCodeMatches,
+} from '../services/password-reset';
 
 import type { AccountRow } from '../types';
 
@@ -43,6 +54,16 @@ interface VerifyEmailBody {
 
 interface ResendBody {
   email?: string;
+}
+
+interface ForgotPasswordBody {
+  email?: string;
+}
+
+interface ResetPasswordBody {
+  email?: string;
+  code?: string;
+  password?: string;
 }
 
 function toPublicAccount(account: AccountRow) {
@@ -242,6 +263,155 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
     }
 
     return reply.send(sent);
+  });
+
+  // ---------------------------------------------------------------
+  // Zaboravljena lozinka — dva koraka:
+  //   POST /forgot-password  { email }                 → kod na mail
+  //   POST /reset-password   { email, code, password } → nova lozinka
+  //
+  // Nijedan odgovor ne otkriva postoji li nalog: /forgot-password uvijek
+  // vraca isto, a /reset-password daje istu poruku za nepostojeci nalog,
+  // pogresan, istekao ili potrosen kod.
+  // ---------------------------------------------------------------
+
+  fastify.post<{ Body: ForgotPasswordBody }>('/forgot-password', async (request, reply) => {
+    const { email } = request.body ?? {};
+
+    if (!email || !email.includes('@')) {
+      return reply.code(400).send({ error: 'Unesite ispravnu email adresu.' });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const sent = { ok: true, message: 'Ako nalog postoji, kod je poslan.' };
+
+    const code = generatePasswordResetCode();
+
+    // Jedan upis koji sam provjerava oba ogranicenja (pauza izmedju
+    // slanja i broj kodova u 24 sata). Ako ijedno ne dozvoljava, upis
+    // ne prodje i mail se ne salje — ali odgovor je isti, jer bi
+    // "sacekajte 40 sekundi" otkrilo da nalog postoji.
+    const { rows } = await pool.query<{ email: string }>(
+      `UPDATE accounts
+       SET password_reset_code_hash = $2,
+           password_reset_expires_at = now() + ($3 || ' minutes')::interval,
+           password_reset_attempts = 0,
+           password_reset_sent_at = now(),
+           password_reset_requests = CASE
+             WHEN password_reset_window_started_at IS NULL
+               OR password_reset_window_started_at < now() - interval '24 hours'
+             THEN 1
+             ELSE password_reset_requests + 1
+           END,
+           password_reset_window_started_at = CASE
+             WHEN password_reset_window_started_at IS NULL
+               OR password_reset_window_started_at < now() - interval '24 hours'
+             THEN now()
+             ELSE password_reset_window_started_at
+           END
+       WHERE email = $1
+         AND (password_reset_sent_at IS NULL
+              OR password_reset_sent_at < now() - ($4 || ' seconds')::interval)
+         AND (password_reset_window_started_at IS NULL
+              OR password_reset_window_started_at < now() - interval '24 hours'
+              OR password_reset_requests < $5)
+       RETURNING email`,
+      [
+        normalizedEmail,
+        hashPasswordResetCode(code),
+        String(PASSWORD_RESET_TTL_MINUTES),
+        String(PASSWORD_RESET_COOLDOWN_SECONDS),
+        MAX_PASSWORD_RESETS_PER_DAY,
+      ],
+    );
+
+    const account = rows[0];
+
+    if (account) {
+      // Slanje se NE ceka. Da se ceka, odgovor za postojeci nalog bi
+      // trajao koliko i SMTP (stotine milisekundi), a za nepostojeci
+      // odmah — razlika po kojoj se nalozi mogu pobrojati. Greska ide
+      // u log; korisnik moze zatraziti kod ponovo.
+      void sendMail(passwordResetMail(account.email, code, PASSWORD_RESET_TTL_MINUTES)).catch(
+        (error: unknown) => {
+          request.log.error({ error }, 'Slanje koda za novu lozinku nije uspjelo');
+        },
+      );
+    }
+
+    return reply.send(sent);
+  });
+
+  fastify.post<{ Body: ResetPasswordBody }>('/reset-password', async (request, reply) => {
+    const { email, code, password } = request.body ?? {};
+
+    if (!email || !code || !password) {
+      return reply.code(400).send({ error: 'email, code i password su obavezni.' });
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return reply
+        .code(400)
+        .send({ error: `Lozinka mora imati bar ${MIN_PASSWORD_LENGTH} karaktera.` });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Jedna poruka za sve neuspjehe: nema naloga, nema koda, istekao,
+    // pogresan, previse pokusaja. Posebna poruka za "previse pokusaja"
+    // bi otkrila da iza adrese stoji nalog sa aktivnim kodom.
+    const invalid = {
+      error: 'Kod nije ispravan ili je istekao. Ako ste više puta pogriješili, zatražite novi kod.',
+    };
+
+    // Pokusaj se TROSI prije poredjenja, u istom upisu koji provjerava
+    // granicu. Da se prvo poredi pa onda broji, istovremeni zahtjevi bi
+    // svi prosli provjeru "manje od pet" i dobili vise pokusaja.
+    const { rows } = await pool.query<{ id: string; password_reset_code_hash: string }>(
+      `UPDATE accounts
+       SET password_reset_attempts = password_reset_attempts + 1
+       WHERE email = $1
+         AND password_reset_code_hash IS NOT NULL
+         AND password_reset_expires_at > now()
+         AND password_reset_attempts < $2
+       RETURNING id, password_reset_code_hash`,
+      [normalizedEmail, MAX_PASSWORD_RESET_ATTEMPTS],
+    );
+
+    const pending = rows[0];
+
+    if (!pending || !passwordResetCodeMatches(code.trim(), pending.password_reset_code_hash)) {
+      return reply.code(400).send(invalid);
+    }
+
+    const passwordHash = await hashPassword(password);
+
+    // Uslov na isti otisak: od dva istovremena zahtjeva sa ispravnim
+    // kodom prolazi samo jedan — kod je jednokratan i pod trkom.
+    //
+    // Nalog se ujedno potvrdjuje: ko je dobio kod na ovu adresu, dokazao
+    // je da je adresa njegova, isto kao kod potvrde emaila.
+    const { rowCount } = await pool.query(
+      `UPDATE accounts
+       SET password_hash = $3,
+           password_changed_at = now(),
+           password_reset_code_hash = NULL,
+           password_reset_expires_at = NULL,
+           password_reset_attempts = 0,
+           email_verified = true,
+           verification_code_hash = NULL,
+           verification_code_expires_at = NULL,
+           verification_attempts = 0
+       WHERE id = $1 AND password_reset_code_hash = $2`,
+      [pending.id, pending.password_reset_code_hash, passwordHash],
+    );
+
+    if (!rowCount) {
+      return reply.code(400).send(invalid);
+    }
+
+    return reply.send({ ok: true });
   });
 
   fastify.post<{ Body: LoginBody }>('/login', async (request, reply) => {

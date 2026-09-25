@@ -62,6 +62,8 @@ najlakše kao one-off komanda unutar istog image-a, npr.
 | GET | `/api/v1/auth/me` | Bearer JWT → trenutni account. |
 | POST | `/api/v1/auth/verify-email` | Potvrda email adrese kodom. Kod **nijedna** ruta ne vraća — u razvoju je u `.mail-outbox/`. |
 | POST | `/api/v1/auth/resend-verification` | Nov kod za potvrdu. |
+| POST | `/api/v1/auth/forgot-password` | `{ email }` → kod za novu lozinku na mail. Odgovor je isti postojao nalog ili ne. Najviše jedan kod u minuti i pet u 24 sata po nalogu. |
+| POST | `/api/v1/auth/reset-password` | `{ email, code, password }` → nova lozinka. Pet pokušaja po kodu. Tokeni izdati prije promjene prestaju važiti. |
 
 ### App (mobilna/admin app) — Bearer JWT (`Authorization: Bearer <token iz login-a>`)
 
