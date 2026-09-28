@@ -41,6 +41,7 @@ type EventType =
   | 'device.new'
   | 'device.classified'
   | 'consent.revoked'
+  | 'consent.verified'
   | 'consent.verify_failed';
 
 interface HubEvent {
@@ -76,6 +77,7 @@ const KNOWN_TYPES: EventType[] = [
   'device.new',
   'device.classified',
   'consent.revoked',
+  'consent.verified',
   'consent.verify_failed',
 ];
 
@@ -231,6 +233,14 @@ async function handle(
     return result.ok ? null : result.error;
   }
 
+  // Uređaj je vidio uspješan TLS handshake klijenta kroz Squid (klijent
+  // vjeruje CA certifikatu). To je dokaz instalacije — tek tada uređaj
+  // ulazi u consented_macs. method pristanka se ne dira (vidi
+  // verifyConsent), pa u reviziji ostaje "portal", ne "manual".
+  if (type === 'consent.verified') {
+    const result = await verifyConsent(client, device, { success: true });
+    return result.ok ? null : result.error;
+  }
   if (type === 'consent.verify_failed') {
     const result = await verifyConsent(client, device, {
       success: false,

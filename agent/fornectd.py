@@ -18,8 +18,11 @@ Veza između fizičkog uređaja i panela (admin.lukmandavran.cc):
      Izvori: ARP tabela + Pi-hole mrežna tabela (klijenti koji su pitali
      DNS u zadnjih 10 min).
 
-Konfiguracija se još NE primjenjuje na Pi-hole/nftables — samo se prima i
-potvrđuje. Primjena lista i consented_macs dolazi u v0.3.
+  6. Portal i pristanak (v0.3): portal na :8080, pristanak -> oblak,
+     provjera certifikata preko Squid loga -> consent.verified, a
+     consented_macs iz konfiguracije -> Squid bump lista.
+
+Liste za filtriranje iz konfiguracije se još NE primjenjuju na Pi-hole.
 
 Samo standardna Python biblioteka (Python >= 3.9), bez pip paketa.
 
@@ -41,7 +44,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -324,6 +327,393 @@ def report_lan(state: dict) -> dict:
     return state
 
 
+# ------------------------------------------ portal i pristanak (v0.3)
+#
+# Tok za jedan uređaj (MAC):
+#   unknown --portal: pristanak--> verifying --TLS handshake kroz Squid--> consented
+#                 \--portal: osnovna--> guest
+#
+# verifying: MAC je privremeno u Squid bump listi, da bi se vidjelo da li
+# klijent vjeruje našem CA certifikatu. Dokaz je dekriptovan zahtjev ka
+# CHECK_HOST u Squid access logu (bez povjerenja u CA TLS handshake ne
+# uspije, pa dekriptovanog zahtjeva nema). Tek tada ide consent.verified
+# u oblak, oblak MAC upiše u consented_macs, a agent ga dobije nazad
+# kroz konfiguraciju.
+#
+# Bump lista = consented_macs iz oblaka ∪ lokalni MAC-ovi u verifying.
+# Sve ostalo Squid propušta bez presretanja (splice).
+
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+PORTAL_DIR = os.environ.get("FORNECT_PORTAL_DIR", "/opt/fornect/portal")
+PORTAL_PORT = int(os.environ.get("FORNECT_PORTAL_PORT", "8080"))
+PORTAL_STATE_FILE = os.path.join(STATE_DIR, "portal.json")
+CA_CERT = os.environ.get("FORNECT_CA_CERT", "/etc/squid/certs/fornect-ca.crt")
+BUMP_FILE = os.environ.get("FORNECT_BUMP_FILE", "/etc/squid/fornect/bump-macs.txt")
+SQUID_LOG = os.environ.get("FORNECT_SQUID_LOG", "/var/log/squid/access.log")
+CHECK_HOST = os.environ.get("FORNECT_CHECK_HOST", "check.fornect.local")
+POLICY_VERSION = "1.0"
+PORTAL_MIME = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+}
+
+_portal_lock = threading.RLock()
+
+
+def portal_load() -> dict:
+    try:
+        with open(PORTAL_STATE_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {"devices": {}}
+
+
+def portal_save(pstate: dict) -> None:
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    tmp = PORTAL_STATE_FILE + ".tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(pstate, f, indent=2)
+    os.replace(tmp, PORTAL_STATE_FILE)
+
+
+def ip_to_mac(ip: str) -> str | None:
+    try:
+        with open("/proc/net/arp", encoding="utf-8") as f:
+            next(f)
+            for line in f:
+                cols = line.split()
+                if len(cols) >= 4 and cols[0] == ip:
+                    return _norm_mac(cols[3])
+    except OSError:
+        pass
+    out = run(["ip", "-4", "neigh", "show", ip]) or ""
+    parts = out.split()
+    if "lladdr" in parts:
+        return _norm_mac(parts[parts.index("lladdr") + 1])
+    return None
+
+
+def ca_fingerprint() -> str | None:
+    try:
+        import hashlib
+        import ssl
+
+        with open(CA_CERT, encoding="utf-8") as f:
+            der = ssl.PEM_cert_to_DER_cert(f.read())
+        digest = hashlib.sha256(der).hexdigest().upper()
+        return ":".join(digest[i : i + 2] for i in range(0, len(digest), 2))
+    except (OSError, ValueError):
+        return None
+
+
+def consented_from_config() -> set[str]:
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
+            cfg = json.load(f).get("config") or {}
+    except (OSError, ValueError):
+        return set()
+    return {m for m in (_norm_mac(x) for x in cfg.get("consented_macs") or []) if m}
+
+
+def send_events(events: list[dict]) -> list[dict]:
+    state = load_state()
+    if not state.get("device_id"):
+        raise ApiError(409, "uređaj nije registrovan")
+    res = api("POST", f"/devices/{state['device_id']}/events", token=state["token"], body={"events": events})
+    return res.get("results", [])
+
+
+def apply_bump_list() -> None:
+    """Upiše bump listu za Squid ako se promijenila i kaže Squidu da je pročita."""
+    consented = consented_from_config()
+    with _portal_lock:
+        pstate = portal_load()
+        for mac, dev in pstate["devices"].items():
+            if mac in consented and dev.get("state") != "consented":
+                dev["state"] = "consented"
+                dev["accepted_policy_version"] = POLICY_VERSION
+        portal_save(pstate)
+        verifying = {m for m, d in pstate["devices"].items() if d.get("state") == "verifying"}
+    wanted = sorted(consented | verifying)
+    body = "".join(m + "\n" for m in wanted)
+    try:
+        with open(BUMP_FILE, encoding="utf-8") as f:
+            if f.read() == body:
+                return
+    except FileNotFoundError:
+        pass
+    os.makedirs(os.path.dirname(BUMP_FILE), exist_ok=True)
+    with open(BUMP_FILE, "w", encoding="utf-8") as f:
+        f.write(body)
+    ok = run(["squid", "-k", "reconfigure"]) is not None
+    log(
+        f"Squid bump lista: {len(consented)} s pristankom + {len(verifying)} u provjeri"
+        + ("" if ok else " (squid -k reconfigure NIJE uspio)")
+    )
+
+
+def portal_classify(mac: str, body: dict) -> tuple[int, dict]:
+    target = body.get("state")
+    with _portal_lock:
+        pstate = portal_load()
+        dev = pstate["devices"].setdefault(mac, {"state": "unknown"})
+        current = dev.get("state", "unknown")
+
+    if target == "guest":
+        send_events([
+            {"event_id": f"new-{mac}", "type": "device.new", "mac": mac, "at": now_iso()},
+            {"event_id": f"guest-{mac}-{int(time.time())}", "type": "device.classified",
+             "mac": mac, "state": "guest", "method": "portal", "at": now_iso()},
+        ])
+        with _portal_lock:
+            pstate = portal_load()
+            pstate["devices"].setdefault(mac, {})["state"] = "guest"
+            portal_save(pstate)
+        apply_bump_list()
+        return 200, {"ok": True, "state": "guest"}
+
+    if target != "consented":
+        return 400, {"error": "state mora biti guest ili consented."}
+
+    if current in ("verifying", "consented"):
+        # Potvrda "instalirao sam" (method: manual) ne zaobilazi provjeru:
+        # uređaj ostaje u verifying dok ne vidi handshake.
+        return 200, {"ok": True, "state": current}
+
+    consent = body.get("consent") or {}
+    name = (consent.get("guardian_name") or "").strip()
+    relation = (consent.get("guardian_relation") or "").strip()
+    if not name or not relation:
+        return 400, {"error": "guardian_name i guardian_relation su obavezni."}
+
+    results = send_events([
+        {"event_id": f"new-{mac}", "type": "device.new", "mac": mac, "at": now_iso()},
+        {
+            "event_id": f"consent-{mac}-{int(time.time())}",
+            "type": "device.classified",
+            "mac": mac,
+            "state": "consented",
+            "method": "portal",
+            "at": now_iso(),
+            "consent": {
+                "guardian_name": name,
+                "guardian_relation": relation,
+                "subject_is_minor": bool(consent.get("subject_is_minor")),
+                "ca_fingerprint": ca_fingerprint(),
+            },
+        },
+    ])
+    rejected = [r for r in results if r.get("status") == "rejected"]
+    if rejected:
+        return 409, {"error": rejected[-1].get("reason") or "Oblak je odbio pristanak."}
+
+    with _portal_lock:
+        pstate = portal_load()
+        dev = pstate["devices"].setdefault(mac, {})
+        dev.update({"state": "verifying", "accepted_policy_version": POLICY_VERSION,
+                    "consented_at": now_iso()})
+        portal_save(pstate)
+    log(f"Pristanak s portala za {mac} — čeka potvrdu certifikata.")
+    apply_bump_list()
+    return 200, {"ok": True, "state": "verifying"}
+
+
+def portal_revoke(mac: str) -> tuple[int, dict]:
+    results = send_events([
+        {"event_id": f"revoke-{mac}-{int(time.time())}", "type": "consent.revoked",
+         "mac": mac, "reason": "Opozvano na portalu.", "at": now_iso()},
+    ])
+    with _portal_lock:
+        pstate = portal_load()
+        pstate["devices"].setdefault(mac, {})["state"] = "guest"
+        pstate["devices"][mac]["accepted_policy_version"] = None
+        portal_save(pstate)
+    apply_bump_list()
+    log(f"Pristanak opozvan na portalu za {mac}: {results[-1].get('status') if results else '?'}")
+    return 200, {"ok": True, "state": "guest"}
+
+
+class PortalHandler(BaseHTTPRequestHandler):
+    server_version = "fornectd-portal"
+
+    def log_message(self, fmt, *args):  # noqa: ANN001
+        pass  # bez logovanja svakog zahtjeva (IP adrese klijenata)
+
+    def _json(self, code: int, body: dict) -> None:
+        raw = json.dumps(body).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def _client_mac(self) -> str | None:
+        return ip_to_mac(self.client_address[0])
+
+    def _body(self) -> dict:
+        try:
+            length = min(int(self.headers.get("Content-Length") or 0), 16384)
+            return json.loads(self.rfile.read(length) or b"{}")
+        except (ValueError, OSError):
+            return {}
+
+    def do_GET(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path == "/v1/portal/session":
+            mac = self._client_mac()
+            if not mac:
+                return self._json(404, {"error": "Uređaj nije pronađen u mreži."})
+            consented = consented_from_config()
+            with _portal_lock:
+                dev = portal_load()["devices"].get(mac, {})
+            st = "consented" if mac in consented else dev.get("state", "unknown")
+            return self._json(200, {
+                "mac": mac,
+                "device_name": dev.get("name") or mac,
+                "state": st,
+                "policy_version": POLICY_VERSION,
+                "accepted_policy_version": dev.get("accepted_policy_version")
+                if st in ("verifying", "consented") else None,
+                "ca_fingerprint": ca_fingerprint(),
+                "ca_url": "/v1/portal/ca.crt",
+                "capacity_full": False,
+                "check_url": f"https://{CHECK_HOST}/ok",
+                "check_timeout_ms": 90000,
+                "language": "bs",
+            })
+        if path == "/v1/portal/ca.crt":
+            try:
+                with open(CA_CERT, "rb") as f:
+                    raw = f.read()
+            except OSError:
+                return self._json(404, {"error": "CA certifikat nije pronađen na uređaju."})
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-x509-ca-cert")
+            self.send_header("Content-Disposition", 'attachment; filename="fornect-ca.crt"')
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+            return None
+        # statika portala
+        name = "index.html" if path in ("/", "") else path.lstrip("/")
+        full = os.path.realpath(os.path.join(PORTAL_DIR, name))
+        root = os.path.realpath(PORTAL_DIR)
+        if not full.startswith(root + os.sep) or not os.path.isfile(full):
+            full = os.path.join(root, "index.html")  # captive: sve nepoznato -> portal
+        try:
+            with open(full, "rb") as f:
+                raw = f.read()
+        except OSError:
+            return self._json(404, {"error": "Portal nije instaliran."})
+        self.send_response(200)
+        self.send_header("Content-Type", PORTAL_MIME.get(os.path.splitext(full)[1], "application/octet-stream"))
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(raw)
+        return None
+
+    def do_POST(self):  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        parts = path.strip("/").split("/")
+        mac = self._client_mac()
+        # Klijent smije mijenjati samo SVOJ uređaj: MAC iz putanje mora biti
+        # MAC s kojeg zahtjev stvarno dolazi (ARP), inače bi bilo ko na
+        # mreži mogao dati ili opozvati pristanak za tuđi telefon.
+        try:
+            if len(parts) == 4 and parts[:2] == ["v1", "devices"] and parts[3] == "classify":
+                target = _norm_mac(urllib.request.unquote(parts[2]))
+                if not mac or target != mac:
+                    return self._json(403, {"error": "Možete mijenjati samo ovaj uređaj."})
+                code, body = portal_classify(mac, self._body())
+                return self._json(code, body)
+            if len(parts) == 4 and parts[:2] == ["v1", "consent"] and parts[3] == "revoke":
+                target = _norm_mac(urllib.request.unquote(parts[2]))
+                if not mac or target != mac:
+                    return self._json(403, {"error": "Možete mijenjati samo ovaj uređaj."})
+                code, body = portal_revoke(mac)
+                return self._json(code, body)
+        except ApiError as e:
+            log(f"Portal: oblak odbio zahtjev: {e}")
+            return self._json(502, {"error": "Oblak trenutno nije dostupan ili je odbio zahtjev."})
+        except (urllib.error.URLError, OSError) as e:
+            log(f"Portal: oblak nedostupan: {e}")
+            return self._json(502, {"error": "Oblak trenutno nije dostupan."})
+        return self._json(404, {"error": "Nepoznata ruta."})
+
+
+def verification_watcher() -> None:
+    """Prati Squid access log: dekriptovan zahtjev ka CHECK_HOST = certifikat radi."""
+    offset = None
+    while _running:
+        try:
+            size = os.path.getsize(SQUID_LOG)
+            if offset is None or size < offset:
+                offset = size  # start ili rotacija loga: čitaj samo novo
+            if size > offset:
+                with open(SQUID_LOG, encoding="utf-8", errors="replace") as f:
+                    f.seek(offset)
+                    chunk = f.read()
+                    offset = f.tell()
+                for line in chunk.splitlines():
+                    cols = line.split()
+                    # native format: time elapsed client code/status bytes METHOD URL ...
+                    if len(cols) < 7 or cols[5] == "CONNECT" or f"://{CHECK_HOST}/" not in cols[6]:
+                        continue
+                    mac = ip_to_mac(cols[2])
+                    if not mac:
+                        continue
+                    with _portal_lock:
+                        pstate = portal_load()
+                        dev = pstate["devices"].get(mac)
+                        if not dev or dev.get("state") != "verifying":
+                            continue
+                    try:
+                        results = send_events([{
+                            "event_id": f"verified-{mac}-{int(time.time())}",
+                            "type": "consent.verified", "mac": mac, "at": now_iso(),
+                        }])
+                    except (ApiError, urllib.error.URLError, OSError) as e:
+                        log(f"Provjera certifikata za {mac} uspjela, ali oblak nedostupan: {e}")
+                        continue
+                    status = results[-1].get("status") if results else "?"
+                    if status in ("applied", "duplicate"):
+                        with _portal_lock:
+                            pstate = portal_load()
+                            pstate["devices"][mac]["state"] = "consented"
+                            portal_save(pstate)
+                        log(f"Certifikat potvrđen za {mac} — puna zaštita.")
+                    else:
+                        log(f"consent.verified za {mac} odbijen: {results[-1].get('reason') if results else ''}")
+        except FileNotFoundError:
+            pass
+        except Exception as e:  # noqa: BLE001
+            log(f"Watcher greška: {e!r}")
+        time.sleep(2)
+
+
+def start_portal() -> None:
+    if not os.path.isdir(PORTAL_DIR):
+        log(f"Portal nije instaliran ({PORTAL_DIR}) — pristanak preko portala isključen.")
+        return
+    try:
+        srv = ThreadingHTTPServer(("0.0.0.0", PORTAL_PORT), PortalHandler)
+    except OSError as e:
+        log(f"Portal ne može na port {PORTAL_PORT}: {e}")
+        return
+    threading.Thread(target=srv.serve_forever, daemon=True, name="portal").start()
+    threading.Thread(target=verification_watcher, daemon=True, name="verify").start()
+    log(f"Portal radi na http://<uređaj>:{PORTAL_PORT}/")
+
+
 # -------------------------------------------------------------- koraci
 
 def register(state: dict) -> dict:
@@ -404,11 +794,15 @@ def pull_config(state: dict) -> dict:
     log(
         f"Nova konfiguracija v{version}: {len(macs)} consented MAC, "
         f"{len(lists)} filter lista, OTA prsten={ota.get('ring')} pauza={ota.get('paused')}. "
-        "(v0.1: sačuvano, još se ne primjenjuje)"
+        "(consented_macs -> Squid; liste još ne)"
     )
     api("POST", f"/devices/{state['device_id']}/config/ack", token=state["token"], body={"version": version})
     state["applied_config_version"] = version
     save_state(state)
+    try:
+        apply_bump_list()
+    except OSError as e:
+        log(f"Bump lista nije upisana: {e}")
     return state
 
 
@@ -449,6 +843,11 @@ def main() -> int:
     log(f"fornectd {VERSION} start, API {API_BASE}")
 
     state = load_state()
+    start_portal()
+    try:
+        apply_bump_list()
+    except OSError as e:
+        log(f"Bump lista nije upisana: {e}")
     backoff = 10
     last_stats_at = 0.0
     dns: dict | None = None

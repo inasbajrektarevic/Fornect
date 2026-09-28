@@ -3,7 +3,7 @@
 Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 `https://admin.lukmandavran.cc/api/v1`. Samo standardna Python biblioteka.
 
-## Šta radi (v0.1)
+## Šta radi (v0.3)
 
 | Korak | Ruta | Status |
 |---|---|---|
@@ -11,7 +11,13 @@ Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 | Novi pairing kod kad istekne, otkriva da je uparen (409) | `POST /devices/:id/pairing-code` | radi |
 | Heartbeat svakih 60 s: verzije, RAM, uptime, servisi, DNS 24h | `POST /devices/:id/heartbeat` | radi |
 | Povlači konfiguraciju, čuva je, potvrđuje | `GET /devices/:id/config`, `POST .../config/ack` | radi |
-| Primjena lista na Pi-hole, consented_macs u nftables | — | **v0.2, nije urađeno** |
+| Novi uređaji na mreži → red "Novi uređaji" u panelu | `POST /devices/:id/events` (`device.new`) | radi (v0.2) |
+| Online/offline uređaja na mreži | `POST /devices/:id/network-presence` | radi (v0.2) |
+| Portal na `:8080` (uslovi, pristanak, CA certifikat) | lokalno `/v1/portal/*`, `/v1/devices/{mac}/classify`, `/v1/consent/{mac}/revoke` | radi (v0.3) |
+| Pristanak s portala → oblak | `device.classified` (state consented, method portal) | radi (v0.3) |
+| Potvrda certifikata: dekriptovan zahtjev ka `check.fornect.local` u Squid logu | `consent.verified` (novo, migracija 022) | radi (v0.3) |
+| consented_macs iz konfiguracije → Squid bump lista | `/etc/squid/fornect/bump-macs.txt` + `squid -k reconfigure` | radi (v0.3) |
+| Primjena lista za filtriranje na Pi-hole | — | **nije urađeno** |
 
 Token je u `/etc/fornect/agent.json` (0600, root). Nikad se ne ispisuje.
 Primljena konfiguracija: `/etc/fornect/config.json`.
@@ -37,6 +43,25 @@ sleep 5; journalctl -u fornectd -n 20 --no-pager
 
 U logu piše `PAIRING KOD: xxxxxx`. Unesi ga u aplikaciju (Uređaji → Upari uređaj).
 
+## Squid (obavezno za v0.3)
+
+Presreće se SAMO MAC koji je u bump listi (pristanak ili provjera u toku).
+Sve ostalo prolazi bez presretanja. Aplikacije s pinningom se nikad ne diraju.
+
+```
+acl step1 at_step SslBump1
+acl fornect_bump arp "/etc/squid/fornect/bump-macs.txt"
+acl pinned_apps ssl::server_name "/etc/squid/fornect/splice-domains.txt"
+ssl_bump peek step1
+ssl_bump splice pinned_apps
+ssl_bump bump fornect_bump
+ssl_bump splice all
+```
+
+Klijent u MAC listi mora biti u istoj mreži kao uređaj (arp ACL radi samo
+na lokalnoj mreži). Na Orange Pi Zero se za test telefon ručno postavi
+proxy `192.168.1.102:3128`; uređaj nije u putanji ostalog prometa.
+
 ## Korisne komande
 
 ```
@@ -48,17 +73,31 @@ systemctl restart fornectd
 Nova registracija (npr. uređaj obrisan u panelu):
 `systemctl stop fornectd && rm /etc/fornect/agent.json && systemctl start fornectd`
 
-## Poznata ograničenja v0.1
+## Poznata ograničenja
 
-- Uređaj sazna da je uparen tek kad mu pairing kod istekne (do 15 min),
-  jer backend nema rutu "da li sam uparen". Aplikacija to vidi odmah.
+- Uređaje na mreži vidi preko ARP tabele i Pi-hole mrežne tabele. Uređaj
+  koji ne koristi Pi-hole kao DNS (ručni DNS, VPN) vidi se samo dok je u ARP-u.
+- Imena su iz Pi-hole-a (hostname ili proizvođač po MAC-u); ako ih nema,
+  ime je MAC adresa, a korisnik ga preimenuje u panelu.
 - Konfiguracija se prima i potvrđuje, ali se NE primjenjuje.
-- `network-presence` i `events` se još ne šalju.
 
 ## Testirano
+
+28.09.2026. v0.3 na lokalnoj kopiji backenda (+ migracija 022): session →
+unknown; tuđi MAC → 403; pristanak bez imena → 400; pristanak → verifying,
+MAC u bump listi, u oblaku `pairing` + consent_record (method portal, CA
+otisak); linija `GET https://check.fornect.local/ok` u Squid logu →
+consent.verified → oblak `paired`/`full`, config v2 s MAC-om, portal
+`consented`; opoziv → oblak `guest`, config v3 prazan, bump lista prazna.
+
+28.09.2026. v0.2 na lokalnoj kopiji backenda: dva MAC-a iz ARP-a (ruter i
+FAILED unosi izostavljeni, velika slova normalizovana) → 2 nova uređaja
+`unpaired` + online; uređaj nestao iz ARP-a → offline; ponovljeni
+`device.new` se ne duplira. Uparenost se sad otkriva odmah (presence 200).
+
 
 28.09.2026. na lokalnoj kopiji backenda (commit 96b87f4): registracija →
 heartbeat (status online, verzije u bazi) → uparivanje kroz
 `/app/hub/claim` (aplikacija vidi `online: true`) → promjena OTA prstena u
 panelu → agent povukao config v1 i potvrdio (acked) → otkrivanje uparenosti
-(409) → čisto gašenje na SIGTERM. Na Orange Pi-u još nije pokrenut.
+(409) → čisto gašenje na SIGTERM. Isti dan instaliran na Orange Pi i uparen (panel: Online).
