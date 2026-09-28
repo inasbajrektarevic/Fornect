@@ -196,9 +196,13 @@
             {{ 'dashboard.software' | translate }}
           </span>
 
+          @if (fornectDevice.version) {
+          <strong>{{ fornectDevice.version }}</strong>
+          } @else {
           <strong class="not-reported">
             {{ 'dashboard.versionNotReported' | translate }}
           </strong>
+          }
         </div>
       </div>
     </section>

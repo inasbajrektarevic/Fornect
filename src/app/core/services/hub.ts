@@ -25,11 +25,26 @@ export interface HubInfo {
    * stanje uređaja.
    */
   paired?: boolean;
+  /** Verzije komponenti koje je uređaj sam prijavio (fornectd, Pi-hole...). */
+  reportedVersions?: Record<string, string> | null;
 }
 
 export interface LoadPoint {
   label: string;
   value: number;
+}
+
+function toVersionMap(value: Record<string, unknown> | null | undefined): Record<string, string> | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, v] of Object.entries(value)) {
+    if (typeof v === 'string' && v.trim()) {
+      out[key] = v.trim();
+    }
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 interface HubApiResponse {
@@ -40,6 +55,8 @@ interface HubApiResponse {
   capacity: number | null;
   online: boolean;
   connected_devices: number;
+  /** Verzije koje agent (fornectd) šalje u heartbeat-u; null dok ih ne pošalje. */
+  reported_versions?: Record<string, unknown> | null;
 }
 
 /**
@@ -212,6 +229,7 @@ export class HubService {
         online: response.online,
         capacity: response.capacity ?? 0,
         connectedUsers: response.connected_devices,
+        reportedVersions: toVersionMap(response.reported_versions),
         paired: true,
       };
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=Fornect agent (veza uređaja s panelom)
+After=network-online.target pihole-FTL.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/fornect/fornectd.py
+Restart=always
+RestartSec=10
+# Agent čita Pi-hole bazu i piše /etc/fornect, zato root.
+User=root
+NoNewPrivileges=true
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

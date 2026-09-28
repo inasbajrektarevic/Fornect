@@ -27,6 +27,7 @@ export async function hubRoutes(fastify: FastifyInstance): Promise<void> {
          d.kind,
          d.mode,
          d.capacity,
+         d.reported_versions,
          (d.last_seen_at IS NOT NULL
            AND d.last_seen_at > now() - (interval '1 minute' * $2)) AS online,
          (SELECT count(*)::int FROM network_devices nd

@@ -34,17 +34,29 @@ export class Dashboard {
    *
    * Ranije je ovdje stajao zakucan objekat: "online", "v0.1.0",
    * "viđen upravo sada" — i za nalog koji uopšte nema uređaj. Nijedan
-   * od ta tri podatka server ne daje. Verziju softvera uređaj još ne
-   * javlja (brief, sekcija 2: ekran piše da je ne javlja, ne izmišlja
-   * je), a "posljednji put viđen" API ne vraća, pa se ne prikazuje.
+   * od ta tri podatka server ne daje. Verziju softvera šalje agent
+   * fornectd u heartbeat-u (od v0.1, 28.09.); dok je ne pošalje, ekran
+   * piše da je ne javlja i ne izmišlja je, a "posljednji put viđen" API ne vraća, pa se ne prikazuje.
    */
-  get fornectDevice(): { paired: boolean; name: string; online: boolean } {
+  get fornectDevice(): { paired: boolean; name: string; online: boolean; version: string | null } {
     const hub = this.hubService.hub();
+    const versions = hub.reportedVersions ?? null;
+
+    // Samo ono što je uređaj sam prijavio. Bez toga ekran piše da
+    // verziju ne prijavljuje — ne izmišlja je.
+    let version: string | null = null;
+    if (versions?.['fornectd']) {
+      version = `fornectd ${versions['fornectd']}`;
+      if (versions['pihole_ftl']) {
+        version += ` · Pi-hole ${versions['pihole_ftl']}`;
+      }
+    }
 
     return {
       paired: hub.paired === true,
       name: hub.name,
       online: hub.online,
+      version,
     };
   }
 
