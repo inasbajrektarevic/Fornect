@@ -294,6 +294,25 @@ async function handleNewDevice(
       [accountId, mac],
     );
 
+    // Hub je naknadno saznao pravo ime (npr. iz DHCP zahtjeva uređaja).
+    // Upisuje se SAMO dok je ime još MAC adresa — ime koje je vlasnik
+    // sam dao u panelu se nikad ne prepisuje. Isto za tip.
+    const name = event.name?.trim();
+    if (name && name !== mac) {
+      await client.query(
+        `UPDATE network_devices SET name = $3
+         WHERE account_id = $1 AND mac_address = $2 AND name = mac_address`,
+        [accountId, mac, name.slice(0, 80)],
+      );
+    }
+    if (event.device_type && event.device_type !== 'unknown') {
+      await client.query(
+        `UPDATE network_devices SET type = $3
+         WHERE account_id = $1 AND mac_address = $2 AND type = 'unknown'`,
+        [accountId, mac, event.device_type],
+      );
+    }
+
     return null;
   }
 

@@ -3,7 +3,7 @@
 Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 `https://admin.lukmandavran.cc/api/v1`. Samo standardna Python biblioteka.
 
-## Šta radi (v0.3)
+## Šta radi (v0.5)
 
 | Korak | Ruta | Status |
 |---|---|---|
@@ -17,6 +17,8 @@ Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 | Pristanak s portala → oblak | `device.classified` (state consented, method portal) | radi (v0.3) |
 | Potvrda certifikata: dekriptovan zahtjev ka `check.fornect.local` u Squid logu | `consent.verified` (novo, migracija 022) | radi (v0.3) |
 | consented_macs iz konfiguracije → Squid bump lista | `/etc/squid/fornect/bump-macs.txt` + `squid -k reconfigure` | radi (v0.3) |
+| Portal se sam otvara novom uređaju na WiFi-ju (captive detekcija na :80) | Pi-hole `dns.hosts` → uređaj | radi (v0.4) |
+| Pravo ime uređaja (iz DHCP zahtjeva koje uređaj pošalje pri spajanju, port 67, samo sluša) | `device.new` s imenom; backend ga upiše samo dok je ime još MAC | radi (v0.5) |
 | Primjena lista za filtriranje na Pi-hole | — | **nije urađeno** |
 
 Token je u `/etc/fornect/agent.json` (0600, root). Nikad se ne ispisuje.
@@ -42,6 +44,23 @@ sleep 5; journalctl -u fornectd -n 20 --no-pager
 ```
 
 U logu piše `PAIRING KOD: xxxxxx`. Unesi ga u aplikaciju (Uređaji → Upari uređaj).
+
+## Pi-hole za captive (obavezno za v0.4)
+
+Port 80 treba agentu, pa Pi-hole admin ide na 8081
+(`http://192.168.1.102:8081/admin`). Adrese za provjeru interneta se
+usmjere na uređaj:
+
+```
+pihole-FTL --config webserver.port '8081o,443os,[::]:8081o,[::]:443os'
+pihole-FTL --config dns.hosts '["192.168.1.102 connectivitycheck.gstatic.com","192.168.1.102 connectivitycheck.android.com","192.168.1.102 clients3.google.com","192.168.1.102 captive.apple.com","192.168.1.102 www.msftconnecttest.com","192.168.1.102 www.msftncsi.com","192.168.1.102 detectportal.firefox.com","192.168.1.102 nmcheck.gnome.org","192.168.1.102 connectivity-check.ubuntu.com","192.168.1.102 connectivitycheck.platform.hicloud.com","192.168.1.102 connect.rom.miui.com","192.168.1.102 check.fornect.local"]'
+systemctl restart pihole-FTL fornectd
+```
+
+Neodlučen uređaj dobije preusmjerenje na portal; uređaj koji je izabrao
+osnovnu ili punu zaštitu dobije normalan odgovor i ništa se ne otvara.
+Uređaj koji je u panelu klasifikovan (a ne na portalu) agent još ne zna,
+pa mu se portal i dalje otvara — to je sljedeći korak.
 
 ## Squid (obavezno za v0.3)
 
@@ -77,11 +96,17 @@ Nova registracija (npr. uređaj obrisan u panelu):
 
 - Uređaje na mreži vidi preko ARP tabele i Pi-hole mrežne tabele. Uređaj
   koji ne koristi Pi-hole kao DNS (ručni DNS, VPN) vidi se samo dok je u ARP-u.
-- Imena su iz Pi-hole-a (hostname ili proizvođač po MAC-u); ako ih nema,
-  ime je MAC adresa, a korisnik ga preimenuje u panelu.
+- Ime se sazna tek kad uređaj pošalje DHCP zahtjev (spajanje na WiFi ili
+  obnova adrese). Uređaji spojeni od ranije dobiju ime nakon ponovnog
+  spajanja. iPhone s "Private Wi-Fi Address" često ne šalje ime; tada ostaje
+  MAC dok ga vlasnik ne preimenuje. Ime koje je vlasnik dao se ne prepisuje.
 - Konfiguracija se prima i potvrđuje, ali se NE primjenjuje.
 
 ## Testirano
+
+28.09.2026. v0.5 lokalno: DHCP zahtjev s imenom "Galaxy-S23" / android-dhcp →
+postojeći uređaj preimenovan u "Galaxy S23", tip phone; "DESKTOP-LUKMAN"
+(MSFT 5.0) → nov uređaj s imenom; ime koje je vlasnik ručno dao ostaje.
 
 28.09.2026. v0.3 na lokalnoj kopiji backenda (+ migracija 022): session →
 unknown; tuđi MAC → 403; pristanak bez imena → 400; pristanak → verifying,

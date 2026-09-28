@@ -22,6 +22,13 @@ Veza između fizičkog uređaja i panela (admin.lukmandavran.cc):
      provjera certifikata preko Squid loga -> consent.verified, a
      consented_macs iz konfiguracije -> Squid bump lista.
 
+  7. Captive (v0.4): port 80 odgovara na provjere interneta (Android,
+     iPhone, Windows...). Neodlučen uređaj -> preusmjerenje na portal, pa
+     mu se prozor sam otvori odmah po spajanju na WiFi.
+
+  8. Imena (v0.5): sluša DHCP zahtjeve na mreži (ime i tip sistema koje
+     uređaj sam pošalje pri spajanju) -> pravo ime u panelu umjesto MAC-a.
+
 Liste za filtriranje iz konfiguracije se još NE primjenjuju na Pi-hole.
 
 Samo standardna Python biblioteka (Python >= 3.9), bez pip paketa.
@@ -40,11 +47,12 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.3.0"
+VERSION = "0.5.0"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -288,34 +296,152 @@ def discover_lan() -> dict[str, dict]:
     return found
 
 
+# ------------------------------------------- imena uređaja (v0.5)
+#
+# Ruter je DHCP server, pa samo on zna imena uređaja. Ali uređaj kad se
+# spoji pošalje DHCP zahtjev kao broadcast na cijelu mrežu, s imenom
+# (opcija 12 / 81) i tipom sistema (opcija 60). Agent sluša port 67 i
+# pamti MAC -> ime. Ništa ne odgovara — ruter i dalje dijeli adrese.
+
+NAMES_FILE = os.path.join(STATE_DIR, "names.json")
+_names_lock = threading.Lock()
+
+
+def names_load() -> dict:
+    try:
+        with open(NAMES_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def _parse_dhcp(pkt: bytes) -> tuple[str, dict] | None:
+    if len(pkt) < 240 or pkt[0] != 1 or pkt[236:240] != b"\x63\x82\x53\x63":
+        return None
+    mac = _norm_mac(":".join(f"{b:02x}" for b in pkt[28:34]))
+    if not mac:
+        return None
+    info: dict = {}
+    i = 240
+    while i < len(pkt):
+        code = pkt[i]
+        if code == 255:
+            break
+        if code == 0:
+            i += 1
+            continue
+        if i + 1 >= len(pkt):
+            break
+        ln = pkt[i + 1]
+        val = pkt[i + 2 : i + 2 + ln]
+        i += 2 + ln
+        if code == 12:
+            info["hostname"] = val.decode("utf-8", "replace").strip("\x00 ").strip()
+        elif code == 60:
+            info["vendor_class"] = val.decode("utf-8", "replace").strip("\x00 ").strip()
+        elif code == 81 and len(val) > 3 and not info.get("fqdn"):
+            info["fqdn"] = val[3:].decode("utf-8", "replace").strip("\x00 .").split(".")[0]
+    return mac, info
+
+
+def friendly_name(info: dict) -> tuple[str | None, str]:
+    """(ime, tip) iz DHCP podataka. Tip je iz skupa koji backend prima."""
+    host = (info.get("hostname") or info.get("fqdn") or "").strip()
+    vc = (info.get("vendor_class") or "").lower()
+    dtype = "unknown"
+    if vc.startswith("android") or "iphone" in host.lower() or "ipad" in host.lower():
+        dtype = "phone"
+    if host and host.lower() not in ("localhost", "android", "unknown"):
+        # "Lukmans-iPhone" / "Galaxy-S23" / "DESKTOP-4K2..." -> čitljivije
+        return host.replace("-", " ").replace("_", " ")[:60], dtype
+    if vc.startswith("android"):
+        return "Android telefon", "phone"
+    if vc.startswith("msft"):
+        return "Windows računar", dtype
+    if vc.startswith("dhcpcd") or vc.startswith("udhcp"):
+        return "Linux uređaj", dtype
+    return None, dtype
+
+
+def dhcp_listener() -> None:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.bind(("0.0.0.0", 67))
+    except OSError as e:
+        log(f"Imena uređaja: ne mogu slušati DHCP (port 67): {e}")
+        return
+    log("Imena uređaja: slušam DHCP zahtjeve na mreži.")
+    while _running:
+        try:
+            pkt, _addr = sock.recvfrom(2048)
+        except OSError:
+            time.sleep(1)
+            continue
+        parsed = _parse_dhcp(pkt)
+        if not parsed:
+            continue
+        mac, info = parsed
+        name, dtype = friendly_name(info)
+        if not name:
+            continue
+        with _names_lock:
+            names = names_load()
+            if names.get(mac, {}).get("name") == name:
+                continue
+            names[mac] = {"name": name, "type": dtype, "seen_at": now_iso(), **info}
+            os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+            tmp = NAMES_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(names, f, indent=2)
+            os.replace(tmp, NAMES_FILE)
+        log(f"Ime uređaja {mac}: {name}")
+
+
 def report_lan(state: dict) -> dict:
-    """Novi MAC -> device.new event (red "Novi uređaji"); svi viđeni -> network-presence."""
+    """Novi MAC -> device.new (red "Novi uređaji"); novo ime -> device.new s imenom
+    (backend ga upiše samo ako je ime još MAC); svi viđeni -> network-presence."""
+    import zlib
+
     lan = discover_lan()
+    with _names_lock:
+        names = names_load()
     known = set(state.get("known_macs") or [])
-    new = [m for m in lan if m not in known]
-    if new:
-        events = [
-            {
-                "event_id": f"new-{mac}",
-                "type": "device.new",
-                "mac": mac,
-                "at": now_iso(),
-                "name": lan[mac].get("name") or None,
-            }
-            for mac in new[:200]
-        ]
-        res = api("POST", f"/devices/{state['device_id']}/events", token=state["token"], body={"events": events})
-        accepted = {
-            r["event_id"][4:]
-            for r in res.get("results", [])
-            if r.get("status") in ("applied", "duplicate")
-        }
-        known |= accepted
+    reported = dict(state.get("reported_names") or {})
+    events = []
+    for mac, entry in lan.items():
+        n = names.get(mac) or {}
+        name = n.get("name") or entry.get("name")
+        dtype = n.get("type") or "unknown"
+        if mac not in known:
+            events.append({"event_id": f"new-{mac}", "type": "device.new", "mac": mac,
+                           "at": now_iso(), "name": name, "device_type": dtype})
+        elif name and reported.get(mac) != name:
+            tag = f"{zlib.crc32(name.encode()):08x}"
+            events.append({"event_id": f"name-{mac}-{tag}", "type": "device.new", "mac": mac,
+                           "at": now_iso(), "name": name, "device_type": dtype})
+    if events:
+        res = api("POST", f"/devices/{state['device_id']}/events", token=state["token"],
+                  body={"events": events[:200]})
+        by_id = {e["event_id"]: e for e in events}
+        applied_new = 0
+        for r in res.get("results", []):
+            if r.get("status") not in ("applied", "duplicate"):
+                continue
+            ev = by_id.get(r.get("event_id"))
+            if not ev:
+                continue
+            known.add(ev["mac"])
+            if ev.get("name"):
+                reported[ev["mac"]] = ev["name"]
+            if ev["event_id"].startswith("new-") and r.get("status") == "applied":
+                applied_new += 1
         state["known_macs"] = sorted(known)
+        state["reported_names"] = reported
         save_state(state)
-        applied = sum(1 for r in res.get("results", []) if r.get("status") == "applied")
-        if applied:
-            log(f"Javljeno {applied} novih uređaja na mreži (red 'Novi uređaji' u panelu).")
+        if applied_new:
+            log(f"Javljeno {applied_new} novih uređaja na mreži (red 'Novi uređaji' u panelu).")
     res = api(
         "POST",
         f"/devices/{state['device_id']}/network-presence",
@@ -700,6 +826,90 @@ def verification_watcher() -> None:
         time.sleep(2)
 
 
+# Captive detekcija: telefon/laptop odmah po spajanju na WiFi provjeri
+# jednu od ovih adresa. Pi-hole ih usmjeri na ovaj uređaj (dns.hosts).
+# Uređaj koji se još nije izjasnio dobije preusmjerenje na portal, pa mu
+# sistem sam otvori prozor "Prijava na mrežu". Uređaj koji se izjasnio
+# dobije tačno odgovor koji sistem očekuje i ništa se ne otvara.
+CAPTIVE_PORT = int(os.environ.get("FORNECT_CAPTIVE_PORT", "80"))
+PIHOLE_ADMIN_PORT = int(os.environ.get("FORNECT_PIHOLE_ADMIN_PORT", "8081"))
+CAPTIVE_DOMAINS = [
+    "connectivitycheck.gstatic.com",
+    "connectivitycheck.android.com",
+    "clients3.google.com",
+    "captive.apple.com",
+    "www.msftconnecttest.com",
+    "www.msftncsi.com",
+    "detectportal.firefox.com",
+    "nmcheck.gnome.org",
+    "connectivity-check.ubuntu.com",
+    "connectivitycheck.platform.hicloud.com",
+    "connect.rom.miui.com",
+]
+APPLE_SUCCESS = b"<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>"
+
+
+def client_decided(mac: str | None) -> bool:
+    if not mac:
+        return True  # ne znamo ko je — ne gnjavi ga portalom
+    if mac in consented_from_config():
+        return True
+    with _portal_lock:
+        st = portal_load()["devices"].get(mac, {}).get("state", "unknown")
+    return st in ("guest", "verifying", "consented")
+
+
+class CaptiveHandler(BaseHTTPRequestHandler):
+    server_version = "fornectd-captive"
+
+    def log_message(self, fmt, *args):  # noqa: ANN001
+        pass
+
+    def _send(self, code: int, body: bytes = b"", ctype: str = "text/plain", headers: dict | None = None) -> None:
+        self.send_response(code)
+        for k, v in (headers or {}).items():
+            self.send_header(k, v)
+        if code != 204:
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if body and self.command != "HEAD":
+            self.wfile.write(body)
+
+    def do_HEAD(self):  # noqa: N802
+        self.do_GET()
+
+    def do_GET(self):  # noqa: N802
+        host = (self.headers.get("Host") or "").split(":")[0].lower()
+        path = self.path.split("?", 1)[0]
+        me = self.connection.getsockname()[0]
+
+        if path.startswith("/admin"):
+            # Pi-hole admin je preseljen s porta 80.
+            return self._send(302, headers={"Location": f"http://{me}:{PIHOLE_ADMIN_PORT}{self.path}"})
+
+        mac = ip_to_mac(self.client_address[0])
+        if not client_decided(mac):
+            return self._send(302, headers={"Location": f"http://{me}:{PORTAL_PORT}/"})
+
+        # Izjasnio se: odgovori onako kako sistem očekuje da je internet OK.
+        if "apple.com" in host:
+            return self._send(200, APPLE_SUCCESS, "text/html")
+        if "msftconnecttest" in host:
+            return self._send(200, b"Microsoft Connect Test")
+        if "msftncsi" in host:
+            return self._send(200, b"Microsoft NCSI")
+        if "firefox" in host:
+            return self._send(200, b"success\n")
+        if "gnome.org" in host or "ubuntu.com" in host:
+            return self._send(200, b"NetworkManager is online\n")
+        if host in CAPTIVE_DOMAINS:
+            return self._send(204)
+        # Neko je otvorio IP uređaja direktno — pokaži portal.
+        return self._send(302, headers={"Location": f"http://{me}:{PORTAL_PORT}/"})
+
+
 def start_portal() -> None:
     if not os.path.isdir(PORTAL_DIR):
         log(f"Portal nije instaliran ({PORTAL_DIR}) — pristanak preko portala isključen.")
@@ -712,6 +922,12 @@ def start_portal() -> None:
     threading.Thread(target=srv.serve_forever, daemon=True, name="portal").start()
     threading.Thread(target=verification_watcher, daemon=True, name="verify").start()
     log(f"Portal radi na http://<uređaj>:{PORTAL_PORT}/")
+    try:
+        cap = ThreadingHTTPServer(("0.0.0.0", CAPTIVE_PORT), CaptiveHandler)
+        threading.Thread(target=cap.serve_forever, daemon=True, name="captive").start()
+        log(f"Captive detekcija radi na portu {CAPTIVE_PORT} (portal se sam otvara novim uređajima).")
+    except OSError as e:
+        log(f"Captive detekcija NE radi — port {CAPTIVE_PORT} zauzet ({e}). Je li Pi-hole admin preseljen na {PIHOLE_ADMIN_PORT}?")
 
 
 # -------------------------------------------------------------- koraci
@@ -843,6 +1059,7 @@ def main() -> int:
     log(f"fornectd {VERSION} start, API {API_BASE}")
 
     state = load_state()
+    threading.Thread(target=dhcp_listener, daemon=True, name="dhcp").start()
     start_portal()
     try:
         apply_bump_list()
