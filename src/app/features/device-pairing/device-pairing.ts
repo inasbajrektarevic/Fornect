@@ -249,10 +249,10 @@ export class DevicePairing {
       selectedLanguage
     );
 
-    // POC: simulira automatsko otkrivanje uređaja
-    // na mreži nakon pairinga Fornect uređaja.
+    // Uređaje na mreži javlja sam Fornect uređaj (agent);
+    // ovdje se samo učita ono što je stvarno otkriveno.
     this.deviceService
-      .discoverDemoDevicesForCurrentAccount();
+      .refreshDevicesForCurrentAccount();
 
     sessionStorage.removeItem(
       'fornect-pending-registration'

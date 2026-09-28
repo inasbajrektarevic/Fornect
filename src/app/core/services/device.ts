@@ -235,14 +235,20 @@ export class DeviceService {
     return this.loadFromApi();
   }
 
-  discoverDemoDevicesForCurrentAccount(): void {
-    const accountId = this.authService.currentUser()?.accountId;
-
-    if (!accountId) {
+  /**
+   * Poslije uparivanja: učitaj uređaje koje je Fornect uređaj stvarno
+   * otkrio na mreži (agent ih javlja kroz device.new / network-presence).
+   *
+   * Ranije je ovdje aplikacija sama upisivala četiri izmišljena uređaja
+   * (iPhone, Living Room TV, Game Console, New device) u nalog — POC
+   * simulacija koja je u produkciji završavala kao lažni podaci.
+   */
+  refreshDevicesForCurrentAccount(): void {
+    if (!this.authService.currentUser()?.accountId) {
       return;
     }
 
-    void this.discoverViaApi();
+    void this.loadFromApi();
   }
 
   setTemporaryOverride(id: string, minutes: number): void {
@@ -433,39 +439,6 @@ export class DeviceService {
       this.allDevices.set(rows.map((row) => this.fromApiRow(row)));
     } catch (error) {
       console.warn('Fornect: učitavanje network-devices nije uspjelo', error);
-    }
-  }
-
-  private async discoverViaApi(): Promise<void> {
-    try {
-      const existing = await firstValueFrom(
-        this.http.get<NetworkDeviceApiRow[]>(`${API_BASE_URL}/app/network-devices`),
-      );
-
-      // Ne dodaj ponovo uređaje ako su već otkriveni.
-      if (existing.length > 0) {
-        this.allDevices.set(existing.map((row) => this.fromApiRow(row)));
-        return;
-      }
-
-      const demoDevices: Array<Pick<NetworkDeviceApiRow, 'mac_address' | 'name' | 'type'>> = [
-        { mac_address: '02:00:00:00:00:01', name: 'iPhone', type: 'phone' },
-        { mac_address: '02:00:00:00:00:02', name: 'Living Room TV', type: 'tv' },
-        { mac_address: '02:00:00:00:00:03', name: 'Game Console', type: 'console' },
-        { mac_address: '02:00:00:00:00:04', name: 'New device', type: 'unknown' },
-      ];
-
-      const created = await Promise.all(
-        demoDevices.map((demoDevice) =>
-          firstValueFrom(
-            this.http.post<NetworkDeviceApiRow>(`${API_BASE_URL}/app/network-devices`, demoDevice),
-          ),
-        ),
-      );
-
-      this.allDevices.set(created.map((row) => this.fromApiRow(row)));
-    } catch (error) {
-      console.warn('Fornect: otkrivanje demo uređaja nije uspjelo', error);
     }
   }
 
