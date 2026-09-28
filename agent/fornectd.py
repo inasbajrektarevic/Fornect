@@ -13,8 +13,13 @@ Veza između fizičkog uređaja i panela (admin.lukmandavran.cc):
   4. Konfiguracija (svakih 60 s): povlači GET /config; kad stigne nova
      verzija, sačuva je u /etc/fornect/config.json i potvrdi (ack).
 
-v0.1 NAMJERNO ne primjenjuje konfiguraciju na Pi-hole/nftables — samo je
-prima i potvrđuje. Primjena lista i consented_macs dolazi u v0.2.
+  5. Uređaji na mreži (v0.2): novi MAC -> device.new event (red "Novi
+     uređaji" u panelu), svi viđeni -> network-presence (online/offline).
+     Izvori: ARP tabela + Pi-hole mrežna tabela (klijenti koji su pitali
+     DNS u zadnjih 10 min).
+
+Konfiguracija se još NE primjenjuje na Pi-hole/nftables — samo se prima i
+potvrđuje. Primjena lista i consented_macs dolazi u v0.3.
 
 Samo standardna Python biblioteka (Python >= 3.9), bez pip paketa.
 
@@ -36,7 +41,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -203,6 +208,122 @@ def system_stats() -> dict:
     return stats
 
 
+# ------------------------------------------------- uređaji na mreži
+
+PRESENT_STATES = {"REACHABLE", "STALE", "DELAY", "PROBE", "PERMANENT"}
+PIHOLE_RECENT_SECONDS = 600
+
+
+def _norm_mac(mac: str | None) -> str | None:
+    if not mac:
+        return None
+    mac = mac.strip().lower().replace("-", ":")
+    parts = mac.split(":")
+    if len(parts) != 6 or any(len(p) != 2 for p in parts):
+        return None
+    if mac in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
+        return None
+    return mac
+
+
+def _gateway_ip() -> str | None:
+    out = run(["ip", "-4", "route", "show", "default"])
+    if out:
+        parts = out.split()
+        if "via" in parts:
+            return parts[parts.index("via") + 1]
+    return None
+
+
+def discover_lan() -> dict[str, dict]:
+    """MAC -> {ip, name}. Izvori: ARP tabela uređaja + Pi-hole mrežna tabela.
+
+    Svi klijenti koriste Pi-hole kao DNS, pa ih Pi-hole vidi i pamti MAC
+    (iz ARP-a). Ruter se izostavlja — on nije klijentski uređaj.
+    """
+    gateway = _gateway_ip()
+    found: dict[str, dict] = {}
+
+    neigh = run(["ip", "-4", "neigh", "show"]) or ""
+    for line in neigh.splitlines():
+        parts = line.split()
+        if "lladdr" not in parts or not parts:
+            continue
+        state = parts[-1]
+        if state not in PRESENT_STATES:
+            continue
+        ip = parts[0]
+        if ip == gateway:
+            continue
+        mac = _norm_mac(parts[parts.index("lladdr") + 1])
+        if mac:
+            found.setdefault(mac, {"ip": ip, "name": None})
+
+    if os.path.exists(PIHOLE_DB):
+        sql = (
+            "SELECT n.hwaddr, coalesce(n.macVendor,''), "
+            "coalesce((SELECT na.name FROM network_addresses na WHERE na.network_id=n.id "
+            "AND na.name IS NOT NULL ORDER BY na.lastSeen DESC LIMIT 1),''), "
+            "coalesce((SELECT na.ip FROM network_addresses na WHERE na.network_id=n.id "
+            "ORDER BY na.lastSeen DESC LIMIT 1),'') "
+            f"FROM network n WHERE n.lastQuery > strftime('%s','now') - {PIHOLE_RECENT_SECONDS};"
+        )
+        out = run(["pihole-FTL", "sqlite3", "-readonly", PIHOLE_DB, sql]) or ""
+        for line in out.splitlines():
+            cols = line.split("|")
+            if len(cols) < 4:
+                continue
+            mac = _norm_mac(cols[0])
+            if not mac or cols[3] == gateway:
+                continue
+            vendor, host, ip = cols[1].strip(), cols[2].strip(), cols[3].strip()
+            entry = found.setdefault(mac, {"ip": ip or None, "name": None})
+            if host:
+                entry["name"] = host.split(".")[0]
+            elif vendor and not entry.get("name"):
+                entry["name"] = f"{vendor} uređaj"
+    return found
+
+
+def report_lan(state: dict) -> dict:
+    """Novi MAC -> device.new event (red "Novi uređaji"); svi viđeni -> network-presence."""
+    lan = discover_lan()
+    known = set(state.get("known_macs") or [])
+    new = [m for m in lan if m not in known]
+    if new:
+        events = [
+            {
+                "event_id": f"new-{mac}",
+                "type": "device.new",
+                "mac": mac,
+                "at": now_iso(),
+                "name": lan[mac].get("name") or None,
+            }
+            for mac in new[:200]
+        ]
+        res = api("POST", f"/devices/{state['device_id']}/events", token=state["token"], body={"events": events})
+        accepted = {
+            r["event_id"][4:]
+            for r in res.get("results", [])
+            if r.get("status") in ("applied", "duplicate")
+        }
+        known |= accepted
+        state["known_macs"] = sorted(known)
+        save_state(state)
+        applied = sum(1 for r in res.get("results", []) if r.get("status") == "applied")
+        if applied:
+            log(f"Javljeno {applied} novih uređaja na mreži (red 'Novi uređaji' u panelu).")
+    res = api(
+        "POST",
+        f"/devices/{state['device_id']}/network-presence",
+        token=state["token"],
+        body={"macs": sorted(lan)},
+    )
+    if res.get("changed"):
+        log(f"Prisutnost: {len(lan)} uređaja na mreži, {res['changed']} promjena statusa.")
+    return state
+
+
 # -------------------------------------------------------------- koraci
 
 def register(state: dict) -> dict:
@@ -342,6 +463,19 @@ def main() -> int:
                 last_stats_at = time.monotonic()
             heartbeat(state, dns)
             state = pull_config(state)
+            try:
+                state = report_lan(state)
+                if not state.get("paired"):
+                    # Backend prima prisutnost samo od uparenog uređaja,
+                    # pa je uspjeh ovdje najbrži dokaz da je uparen.
+                    state["paired"] = True
+                    state["pairing_code"] = None
+                    state["pairing_code_expires_at"] = None
+                    save_state(state)
+                    log("Uređaj je uparen s nalogom.")
+            except ApiError as e:
+                if e.status != 409:  # 409 = još nije uparen, normalno
+                    raise
             backoff = 10
             sleep_for = HEARTBEAT_INTERVAL
         except ApiError as e:
