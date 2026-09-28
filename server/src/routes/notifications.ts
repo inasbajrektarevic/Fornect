@@ -41,9 +41,19 @@ export async function notificationRoutes(fastify: FastifyInstance): Promise<void
       await syncReconsentNotice(client, request.accountId!, CONSENT_POLICY_VERSION);
 
       const { rows } = await client.query<NotificationRow>(
-        `SELECT * FROM notifications
-         WHERE account_id = $1 AND resolved_at IS NULL
-         ORDER BY created_at DESC
+        // Ime uređaja u tekstu obavještenja se uzima iz TRENUTNOG zapisa
+        // uređaja, ne iz snimka u params. Obavještenje "nov uređaj" nastaje
+        // u trenutku kad agent još zna samo MAC; ime (iz DHCP-a ili koje
+        // vlasnik da u panelu) stigne kasnije, a staro obavještenje bi
+        // zauvijek pokazivalo MAC.
+        `SELECT n.*,
+                CASE WHEN nd.name IS NOT NULL AND n.params ? 'name'
+                     THEN n.params || jsonb_build_object('name', nd.name)
+                     ELSE n.params END AS params
+         FROM notifications n
+         LEFT JOIN network_devices nd ON nd.id = n.network_device_id
+         WHERE n.account_id = $1 AND n.resolved_at IS NULL
+         ORDER BY n.created_at DESC
          LIMIT $2`,
         [request.accountId, LIST_LIMIT],
       );
