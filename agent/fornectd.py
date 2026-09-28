@@ -52,7 +52,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -246,12 +246,55 @@ def _gateway_ip() -> str | None:
     return None
 
 
+_last_sweep = 0.0
+SWEEP_INTERVAL = 300
+
+
+def arp_sweep() -> None:
+    """Natjera kernel da pita (ARP) svaku adresu u /24 mreži uređaja.
+
+    Bez ovoga agent vidi samo uređaje koji su sami pričali s njim (DNS).
+    Uređaj sa statičkom IP adresom i vlastitim DNS-om bi ostao nevidljiv,
+    iako ga ruter vidi. Na ARP odgovara svaki uređaj, i onaj s firewallom.
+    Šalje se po jedan prazan UDP paket na port 9 (discard) — samo da bi
+    kernel poslao ARP upit; odgovor na UDP nije bitan.
+    """
+    global _last_sweep
+    if time.monotonic() - _last_sweep < SWEEP_INTERVAL and _last_sweep:
+        return
+    _last_sweep = time.monotonic()
+    out = run(["ip", "-4", "-o", "addr", "show", "scope", "global"]) or ""
+    for line in out.splitlines():
+        parts = line.split()
+        if "inet" not in parts:
+            continue
+        cidr = parts[parts.index("inet") + 1]
+        ip, _, prefix = cidr.partition("/")
+        if prefix != "24":
+            continue  # samo obične kućne mreže; veće se ne skeniraju
+        base = ip.rsplit(".", 1)[0]
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setblocking(False)
+        for host in range(1, 255):
+            target = f"{base}.{host}"
+            if target == ip:
+                continue
+            try:
+                sock.sendto(b"", (target, 9))
+            except OSError:
+                pass
+        sock.close()
+        time.sleep(3)  # da ARP odgovori stignu prije čitanja tabele
+        break
+
+
 def discover_lan() -> dict[str, dict]:
     """MAC -> {ip, name}. Izvori: ARP tabela uređaja + Pi-hole mrežna tabela.
 
     Svi klijenti koriste Pi-hole kao DNS, pa ih Pi-hole vidi i pamti MAC
     (iz ARP-a). Ruter se izostavlja — on nije klijentski uređaj.
     """
+    arp_sweep()
     gateway = _gateway_ip()
     found: dict[str, dict] = {}
 
