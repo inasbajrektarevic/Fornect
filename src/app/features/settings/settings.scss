@@ -173,60 +173,10 @@
   cursor: pointer;
 }
 
-.saved-message,
-.success-message {
+.saved-message {
   color: #34805d;
   font-weight: 700;
 }
-
-.password-form {
-  max-width: 470px;
-  display: grid;
-  gap: 14px;
-}
-
-.password-form label span {
-  display: block;
-  margin-bottom: 6px;
-  color: #5c687a;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.password-form input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 11px 12px;
-  border: 1px solid #d5dce6;
-  border-radius: 9px;
-  font: inherit;
-}
-
-.password-form input:focus {
-  outline: 2px solid rgba(245, 130, 31, 0.15);
-  border-color: var(--fn-orange);
-}
-
-.demo-notice {
-  margin-bottom: 18px;
-  padding: 13px 15px;
-  border-radius: 10px;
-  background: #fff7ed;
-  color: #8b5a27;
-  font-size: 13px;
-}
-
-.error-message {
-  margin: 0;
-  color: #b54747;
-  font-size: 13px;
-}
-
-.success-message {
-  margin: 0;
-  font-size: 13px;
-}
-
 
 .mode-options {
   display: flex;
@@ -251,7 +201,7 @@
   color: #ffffff;
 }
 
-.poc-note {
+.settings-note {
   margin: 14px 0 0;
   font-size: 12px;
   line-height: 1.6;

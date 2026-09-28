@@ -9,6 +9,7 @@ import {
   FornectNetworkDevice
 } from '../../core/services/device';
 
+import { ConnectionService } from '../../core/services/connection';
 import { HubService } from '../../core/services/hub';
 import { isPausedAt } from '../../core/services/schedule';
 import { ConnectionBanner } from '../../shared/components/connection-banner/connection-banner';
@@ -25,6 +26,7 @@ export class Dashboard {
   private readonly deviceService = inject(DeviceService);
   private readonly notificationService = inject(NotificationService);
   private readonly hubService = inject(HubService);
+  private readonly connectionService = inject(ConnectionService);
   private readonly router = inject(Router);
 
   networkPaused = this.loadNetworkPaused();
@@ -58,6 +60,61 @@ export class Dashboard {
       online: hub.online,
       version,
     };
+  }
+
+  /**
+   * Šta velika kartica na vrhu smije reći.
+   *
+   * Ranije je uvijek pisala "Vaša mreža je zaštićena / Fornect je
+   * aktivan" — i kad uređaj nije uparen, i kad je offline. Zaštitu
+   * potvrđuje samo uparen uređaj za koji je server upravo javio da je
+   * online (ConnectionService je 'online' tek poslije takvog odgovora;
+   * kad server ne odgovara, stanje nije potvrđeno).
+   */
+  get heroState(): 'unpaired' | 'offline' | 'paused' | 'protected' {
+    const device = this.fornectDevice;
+
+    if (!device.paired) {
+      return 'unpaired';
+    }
+
+    if (!device.online || !this.connectionService.isOnline()) {
+      return 'offline';
+    }
+
+    return this.networkPaused ? 'paused' : 'protected';
+  }
+
+  get heroTitleKey(): string {
+    switch (this.heroState) {
+      case 'unpaired':
+        return 'dashboard.deviceNotPaired';
+
+      case 'offline':
+        return 'dashboard.deviceOffline';
+
+      case 'paused':
+        return 'dashboard.internetPaused';
+
+      default:
+        return 'dashboard.networkProtected';
+    }
+  }
+
+  get heroTextKey(): string {
+    switch (this.heroState) {
+      case 'unpaired':
+        return 'dashboard.deviceNotPairedText';
+
+      case 'offline':
+        return 'dashboard.deviceOfflineText';
+
+      case 'paused':
+        return 'dashboard.pausedMessage';
+
+      default:
+        return 'dashboard.monitoring';
+    }
   }
 
   get unreadNotifications(): number {

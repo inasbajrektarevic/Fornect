@@ -20,9 +20,14 @@ interface ConnectionState {
  * Ovaj servis dodaje ono što je nedostajalo: oznaku koliko
  * su podaci stari i da li se uređaju uopšte može pristupiti.
  *
- * U POC-u se stanje mijenja ručno iz Postavki. Kada backend
- * bude spreman, `setStatus` poziva HTTP sloj na osnovu
- * stvarnog odgovora API-ja.
+ * Stanje postavlja HubService iz stvarnog odgovora GET /app/hub:
+ * 'online' kad server javi da hub šalje heartbeat, 'offline' kad
+ * ne šalje (ili hub nije uparen), 'error' kad server nije
+ * odgovorio. Ranije ga je ručno birao POC prekidač u Postavkama.
+ *
+ * Ovaj servis namjerno zavisi samo od AuthService-a. HubService
+ * ubrizgava njega, pa bi obrnuti inject napravio krug — zato se
+ * "Pokušaj ponovo" vraća HubService-u preko `registerRefresh`.
  */
 @Injectable({
   providedIn: 'root'
@@ -49,10 +54,11 @@ export class ConnectionService {
     () => this.state().lastSyncedAt
   );
 
-  constructor() {
-    if (this.state().status === 'online') {
-      this.markSynced();
-    }
+  /** Stvarno osvježavanje sa servera; registruje ga HubService. */
+  private refresher: (() => Promise<void>) | null = null;
+
+  registerRefresh(refresher: () => Promise<void>): void {
+    this.refresher = refresher;
   }
 
   setStatus(status: ConnectionStatus): void {
@@ -68,19 +74,13 @@ export class ConnectionService {
     this.save(state);
   }
 
-  /** Ponovni pokušaj povezivanja. */
-  retry(): void {
-    this.setStatus('online');
-  }
-
-  markSynced(): void {
-    const state: ConnectionState = {
-      status: this.state().status,
-      lastSyncedAt: Date.now()
-    };
-
-    this.state.set(state);
-    this.save(state);
+  /**
+   * Ponovni pokušaj: stvarno pita server. Stanje mijenja tek odgovor
+   * (preko setStatus iz HubService-a) — ranije je dugme samo
+   * proglašavalo vezu uspostavljenom, bez ijednog zahtjeva.
+   */
+  retry(): Promise<void> {
+    return this.refresher?.() ?? Promise.resolve();
   }
 
   syncWithCurrentAccount(): void {
@@ -114,10 +114,10 @@ export class ConnectionService {
 
         return {
           status:
-            state.status === 'offline' ||
+            state.status === 'online' ||
             state.status === 'error'
               ? state.status
-              : 'online',
+              : 'offline',
           lastSyncedAt: state.lastSyncedAt ?? null
         };
       } catch {
@@ -125,8 +125,10 @@ export class ConnectionService {
       }
     }
 
+    // Dok server ne odgovori, veza nije potvrđena — ne pretpostavlja
+    // se da je uređaj online.
     return {
-      status: 'online',
+      status: 'offline',
       lastSyncedAt: null
     };
   }

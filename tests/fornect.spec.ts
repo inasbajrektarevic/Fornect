@@ -188,6 +188,33 @@ async function registerHub(
   return hub;
 }
 
+/**
+ * Glumi odgovor GET /app/hub (kao test 42): pravi hub bi trosio jedno
+ * od deset uparivanja po satu, a "online" zavisi od heartbeat-a koji
+ * test ne salje. Testovi ovdje provjeravaju sta PANEL kaze za dato
+ * stanje uredjaja, ne server.
+ */
+async function mockHub(
+  page: Page,
+  hub: { kind?: string; mode?: string; online: boolean; capacity?: number | null; connected_devices?: number },
+): Promise<void> {
+  await page.route('**/api/v1/app/hub', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'FN-TEST-HUB',
+        name: 'Test Fornect',
+        kind: 'home',
+        mode: 'home',
+        capacity: null,
+        connected_devices: 0,
+        ...hub,
+      }),
+    }),
+  );
+}
+
 const WEEK_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DEFAULT_SELECTED_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -456,7 +483,10 @@ test('02 - login validates fields and creates session', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole('heading', { name: 'Your network is protected' })).toBeVisible();
+  // Svjez nalog nema uparen uredjaj, pa pocetna ne smije tvrditi da je
+  // mreza zasticena.
+  await expect(page.getByRole('heading', { name: 'Fornect device is not paired' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your network is protected' })).toHaveCount(0);
 
   await page.reload();
 
@@ -664,6 +694,9 @@ test('11 - main devices screen fits mobile width', async ({ page }) => {
 });
 
 test('12 - dashboard quick actions all work', async ({ page }) => {
+  // "Zasticena" i "pauziran" ima smisla samo uz uparen uredjaj koji je
+  // online; bez njega pocetna pise da uredjaj nije uparen.
+  await mockHub(page, { online: true });
   await login(page);
 
   // Devices
@@ -714,15 +747,15 @@ test('13 - help page is reachable from settings', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: 'Help & Support' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Send request' }).click();
+  // Forma za podrsku je pisala "zahtjev je zaprimljen", a poruka nije
+  // isla nikome. Sada ekran otvoreno kaze da slanje nije povezano.
+  await expect(
+    page.getByText('Sending messages to support from the app is not connected yet'),
+  ).toBeVisible();
 
-  await expect(page.getByText('Please enter at least 10 characters.')).toBeVisible();
-
-  await page.getByLabel('Message').fill('My living room TV keeps going offline.');
-
-  await page.getByRole('button', { name: 'Send request' }).click();
-
-  await expect(page.getByText('Your support request has been received.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Send request' })).toHaveCount(0);
+  await expect(page.getByLabel('Message')).toHaveCount(0);
+  await expect(page.getByText('Your support request has been received.')).toHaveCount(0);
 });
 
 test('14 - registration survives an interrupted pairing step', async ({ page }) => {
@@ -2364,6 +2397,17 @@ test('41 - an account without a Pro device cannot open the Pro panel', async ({ 
   await expect(page.getByTestId('device-mode')).toHaveText('Home');
   await expect(page.getByRole('button', { name: 'Hospitality' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Agency' })).toHaveCount(0);
+
+  // Ni stanje veze se vise ne bira rucno (bivsi POC prekidac), ni
+  // demo-racun napomena ne postoji.
+  await expect(page.getByText('Device connection state')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Connected' })).toHaveCount(0);
+  await expect(page.getByText('demo account')).toHaveCount(0);
+
+  // Promjena lozinke iz postavki nije povezana sa serverom: nema forme
+  // koja bi glumila uspjeh, samo put preko emaila.
+  await expect(page.getByLabel('Current password')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /Change password by email/ })).toBeVisible();
 });
 
 // Pro nalog pri PRVOJ prijavi na novom pregledacu (nista lokalno
@@ -2407,6 +2451,12 @@ test('42 - a Pro account gets the Pro panel on its very first sign-in', async ({
 
   await page.goto('/pro/guests');
   await expect(page).toHaveURL(/\/pro\/guests$/);
+
+  // Trenutno povezani dolaze sa servera (12); istorija gostiju ne
+  // postoji, pa se ne izmislja (ranije zakucanih 34 / 218 / 42 min).
+  await expect(page.locator('.stat-card').first()).toContainText('12');
+  await expect(page.getByText('The device does not send this data yet.')).toBeVisible();
+  await expect(page.getByText('Guests today', { exact: true })).toHaveCount(0);
 
   await page.goto('/pro/monitoring');
   await expect(page).toHaveURL(/\/pro$/);
@@ -2534,6 +2584,9 @@ test('45 - the home screen does not invent a device the account does not have', 
   page,
 }) => {
   await login(page);
+
+  await expect(page.getByRole('heading', { name: 'Fornect device is not paired' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your network is protected' })).toHaveCount(0);
 
   await expect(page.getByRole('heading', { name: 'No device paired' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Pair device' })).toBeVisible();
@@ -2689,4 +2742,110 @@ test('47 - password reset does not reveal accounts, and a code survives only fiv
 
   expect(ghost.status()).toBe(400);
   expect(await ghost.json()).toEqual(await late.json());
+});
+
+// Velika kartica na pocetnoj je uvijek pisala "Vasa mreza je
+// zasticena", i za uredjaj koji je offline. Stanje veze je birao rucni
+// POC prekidac u Postavkama. Sada oboje dolazi iz odgovora GET /app/hub.
+test('48 - the home screen says protected only while the paired device is online', async ({
+  page,
+}) => {
+  let online = true;
+  let failing = false;
+
+  await page.route('**/api/v1/app/hub', (route) => {
+    if (failing) {
+      return route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+    }
+
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: 'FN-TEST-0048',
+        name: 'Fornect Home',
+        kind: 'home',
+        mode: 'home',
+        capacity: null,
+        online,
+        connected_devices: 0,
+      }),
+    });
+  });
+
+  await login(page, { withDevices: false });
+
+  const status = page.getByTestId('protection-status');
+
+  await expect(status.getByRole('heading', { name: 'Your network is protected' })).toBeVisible();
+  await expect(page.getByText('Fornect device is unreachable')).toHaveCount(0);
+
+  // Uredjaj prestane slati heartbeat.
+  online = false;
+  await page.reload();
+
+  await expect(status.getByRole('heading', { name: 'Fornect device is offline' })).toBeVisible();
+  await expect(status).toHaveClass(/warning/);
+  await expect(page.getByRole('heading', { name: 'Your network is protected' })).toHaveCount(0);
+
+  // "Try again" stvarno pita server; dok je uredjaj offline, ostaje offline.
+  const retry = page.getByRole('button', { name: 'Try again' });
+  await expect(retry).toBeVisible();
+
+  online = true;
+  await retry.click();
+
+  await expect(status.getByRole('heading', { name: 'Your network is protected' })).toBeVisible();
+
+  // Server ne odgovara: zastita nije potvrdjena, traka kaze da je
+  // prikazano posljednje poznato stanje.
+  failing = true;
+  await page.reload();
+
+  await expect(status.getByRole('heading', { name: 'Fornect device is offline' })).toBeVisible();
+  await expect(page.getByText('Error communicating with the Fornect server')).toBeVisible();
+});
+
+// Pro ekrani su prikazivali zakucane brojeve: grafikon opterecenja,
+// kategorije prometa, dogadjaje, "izvjestaj je zatrazen" i "zahtjev
+// za nadogradnju je zabiljezen". Sada pisu da podataka nema.
+test('49 - Pro screens show honest empty states instead of invented numbers', async ({ page }) => {
+  await mockHub(page, {
+    kind: 'pro',
+    mode: 'agency',
+    online: true,
+    capacity: 100,
+    connected_devices: 12,
+  });
+
+  await seedAccount(page, { withDevices: false });
+
+  await page.goto('/pro');
+  await expect(page).toHaveURL(/\/pro$/);
+
+  // Kapacitet i broj korisnika su sa servera.
+  await expect(page.getByRole('heading', { name: /12 \/ 100/ })).toBeVisible();
+
+  // Opterecenje mreze: nema grafikona iz izmisljenih brojeva.
+  await expect(page.getByRole('heading', { name: 'The device does not send this data yet' })).toBeVisible();
+  await expect(page.locator('.chart svg')).toHaveCount(0);
+  await expect(page.getByText(/users on average/)).toHaveCount(0);
+  await expect(page.getByText('Infinity')).toHaveCount(0);
+
+  await page.goto('/pro/monitoring');
+  await expect(page).toHaveURL(/\/pro\/monitoring$/);
+
+  await expect(
+    page.getByRole('heading', { name: 'The device does not send traffic statistics yet' }),
+  ).toBeVisible();
+  await expect(page.getByText('No events', { exact: true })).toBeVisible();
+  await expect(page.getByText('18420')).toHaveCount(0);
+  await expect(page.getByText('Web traffic')).toHaveCount(0);
+
+  await expect(page.getByRole('button', { name: 'Generate report' })).toBeDisabled();
+
+  await page.goto('/pro/upgrade');
+  await page.getByRole('button', { name: 'Contact sales' }).first().click();
+
+  await expect(page.getByText('Sending requests from the app is not connected yet')).toBeVisible();
 });

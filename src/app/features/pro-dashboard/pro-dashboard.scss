@@ -234,6 +234,23 @@
   font-size: 18px;
 }
 
+/* Podatak koji uređaj ne šalje: tiši tekst umjesto broja. */
+.stat-card strong.not-reported {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fn-muted);
+}
+
+.empty-state {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--fn-border-strong);
+  border-radius: 14px;
+  color: var(--fn-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 .period-switch {
   display: flex;
   gap: 6px;

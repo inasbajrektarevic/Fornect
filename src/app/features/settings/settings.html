@@ -183,42 +183,14 @@
         </span>
       </div>
 
-      <p class="poc-note">
+      <p class="settings-note">
         {{ 'settings.deviceModeFromDevice' | translate }}
       </p>
     </section>
 
-    <section class="settings-card">
-      <div class="section-heading">
-        <p class="section-label">
-          {{ 'connection.label' | translate }}
-        </p>
-
-        <h2>
-          {{ 'connection.simulateTitle' | translate }}
-        </h2>
-
-        <p>
-          {{ 'connection.simulateDescription' | translate }}
-        </p>
-      </div>
-
-      <div class="mode-options">
-        @for (status of connectionStatuses; track status) {
-          <button
-            type="button"
-            class="mode-option"
-            [class.active]="connectionStatus === status"
-            (click)="changeConnectionStatus(status)">
-            {{ connectionLabelKey(status) | translate }}
-          </button>
-        }
-      </div>
-
-      <p class="poc-note">
-        {{ 'connection.simulatePocNote' | translate }}
-      </p>
-    </section>
+    <!-- Ovdje je bio POC prekidač kojim se stanje veze biralo ručno.
+         Stanje sada dolazi iz odgovora servera (HubService), pa ga
+         korisnik ne bira — vidi ga u traci na ekranima uređaja. -->
 
     <section class="settings-card">
       <div class="section-heading">
@@ -283,6 +255,13 @@
           [(ngModel)]="preferences.emailUpdates">
       </label>
 
+      <!-- Server za sada šalje samo verifikacioni i reset-lozinka
+           email; ove postavke nigdje ne stižu. Ne obećavamo više od
+           toga. -->
+      <p class="settings-note">
+        {{ 'settings.emailNotConnected' | translate }}
+      </p>
+
       <div class="save-row">
         <button
           type="button"
@@ -308,67 +287,20 @@
         <h2>
           {{ 'settings.changePassword' | translate }}
         </h2>
+
+        <!-- Server nema endpoint za promjenu lozinke iz postavki. Ranije
+             je forma provjeravala polja i pisala zelenu poruku, a lozinka
+             se nije mijenjala. Radi samo reset preko koda na email. -->
+        <p>
+          {{ 'settings.passwordNotConnected' | translate }}
+        </p>
       </div>
 
-      @if (isDemoAccount) {
-        <div class="demo-notice">
-          {{ 'settings.demoNotice' | translate }}
-        </div>
-      }
-
-      <div class="password-form">
-        <label>
-          <span>
-            {{ 'settings.currentPassword' | translate }}
-          </span>
-
-          <input
-            type="password"
-            [(ngModel)]="currentPassword"
-            autocomplete="current-password">
-        </label>
-
-        <label>
-          <span>
-            {{ 'settings.newPassword' | translate }}
-          </span>
-
-          <input
-            type="password"
-            [(ngModel)]="newPassword"
-            autocomplete="new-password">
-        </label>
-
-        <label>
-          <span>
-            {{ 'settings.confirmPassword' | translate }}
-          </span>
-
-          <input
-            type="password"
-            [(ngModel)]="confirmPassword"
-            autocomplete="new-password">
-        </label>
-
-        @if (passwordError) {
-          <p class="error-message">
-            {{ passwordError }}
-          </p>
-        }
-
-        @if (passwordMessage) {
-          <p class="success-message">
-            {{ passwordMessage }}
-          </p>
-        }
-
-        <button
-          type="button"
-          class="primary-button"
-          (click)="changePassword()">
-          {{ 'settings.changePassword' | translate }}
-        </button>
-      </div>
+      <a
+        routerLink="/forgot-password"
+        class="help-link">
+        {{ 'settings.passwordResetLink' | translate }} →
+      </a>
     </section>
 
     <section class="settings-card">

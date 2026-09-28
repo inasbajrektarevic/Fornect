@@ -72,9 +72,29 @@ export class ProDashboard {
     return this.hubService.getLoad(this.period);
   }
 
+  /**
+   * Uređaj istoriju opterećenja još ne šalje, pa je niz prazan i
+   * ekran prikazuje prazno stanje umjesto grafikona, vrha i prosjeka.
+   */
+  get hasLoadData(): boolean {
+    return this.loadPoints.length > 0;
+  }
+
+  /** Kapacitet koji server ne zna (null → 0) se ne prikazuje kao "0". */
+  get hasCapacity(): boolean {
+    return this.hub.capacity > 0;
+  }
+
   get peakLoad(): number {
+    const points = this.loadPoints;
+
+    // Math.max() nad praznim nizom daje -Infinity.
+    if (!points.length) {
+      return 0;
+    }
+
     return Math.max(
-      ...this.loadPoints.map(point => point.value)
+      ...points.map(point => point.value)
     );
   }
 

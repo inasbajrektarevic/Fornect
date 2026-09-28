@@ -161,6 +161,20 @@
   font-size: 20px;
 }
 
+/* Prazno stanje za istoriju gostiju: zauzima ostatak reda, da se
+   vidi da podatak nedostaje, a ne da je nula. */
+.stat-card.empty {
+  grid-column: 2 / -1;
+  border-style: dashed;
+  background: transparent;
+}
+
+.stat-card.empty small {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fn-muted);
+}
+
 .success-message {
   border-radius: 12px;
   background: #f0fdf4;

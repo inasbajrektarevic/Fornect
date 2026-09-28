@@ -26,6 +26,14 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Fornect je aktivan i nadzire vašu mrežu.',
     'dashboard.pausedMessage':
       'Pristup internetu je trenutno pauziran za sve uređaje.',
+    'dashboard.deviceNotPaired':
+      'Fornect uređaj nije uparen',
+    'dashboard.deviceNotPairedText':
+      'Zaštita mreže počinje kada uparite Fornect uređaj. Do tada mreža nije zaštićena.',
+    'dashboard.deviceOffline':
+      'Fornect uređaj je offline',
+    'dashboard.deviceOfflineText':
+      'Zaštita trenutno nije potvrđena. Provjerite da je uređaj uključen i povezan na internet.',
     'dashboard.devicesOnline': 'Uređaji online',
     'dashboard.protectedDevices': 'Zaštićeni uređaji',
     'dashboard.childProfiles': 'Dječiji profili',
@@ -110,6 +118,14 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'pro.periodDay': 'Dan',
     'pro.periodWeek': 'Sedmica',
     'pro.periodMonth': 'Mjesec',
+    'pro.capacityNotReported':
+      'Uređaj ne prijavljuje kapacitet licence.',
+    'pro.noData':
+      'Nema podataka',
+    'pro.noLoadData':
+      'Uređaj još ne šalje ove podatke',
+    'pro.noLoadDataText':
+      'Istorija opterećenja mreže (dan, sedmica, mjesec) prikazaće se kada je Fornect uređaj počne slati.',
 
     'hospitality.title': 'Zaštita gostiju',
     'hospitality.subtitle':
@@ -125,10 +141,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'hospitality.noParentalControl':
       'Roditeljski nadzor i vremenska ograničenja nisu dostupni u ovom modu jer nisu relevantni za goste.',
     'hospitality.connectedNow': 'Trenutno povezano',
-    'hospitality.guestsToday': 'Gostiju danas',
-    'hospitality.guestsThisWeek': 'Gostiju ove sedmice',
-    'hospitality.averageSession': 'Prosječna sesija',
-    'hospitality.minutes': '{minutes} min',
+    'hospitality.guestHistory':
+      'Gosti danas, ove sedmice i prosječna sesija',
+    'hospitality.noGuestStats':
+      'Uređaj još ne šalje ove podatke.',
     'hospitality.privacyNote':
       'Statistika je zbirna. Pojedinačni gosti se ne identifikuju niti prate.',
     'hospitality.splashLabel': 'Stranica dobrodošlice',
@@ -149,22 +165,15 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'agency.monitoringLabel': 'Monitoring',
     'agency.monitoringDescription':
       'Prikazuju se samo metapodaci: broj konekcija i tip saobraćaja. Sadržaj komunikacije se ne čita niti pohranjuje.',
-    'agency.totalConnections': 'Ukupno {count} konekcija',
-    'agency.connections': 'konekcija',
-    'agency.categoryWeb': 'Web saobraćaj',
-    'agency.categoryStreaming': 'Streaming',
-    'agency.categorySocial': 'Društvene mreže',
-    'agency.categoryAds': 'Reklame i pratioci',
-    'agency.categoryOther': 'Ostalo',
+    'agency.noTrafficStats':
+      'Uređaj još ne šalje statistiku prometa',
+    'agency.noTrafficStatsText':
+      'Kada Fornect uređaj počne slati statistiku, ovdje će se vidjeti broj konekcija po tipu saobraćaja.',
     'agency.reportsLabel': 'Izvještaji',
     'agency.reportsTitle': 'Generisanje izvještaja',
-    'agency.reportsDescription':
-      'Izaberite period i format izvještaja za preuzimanje.',
-    'agency.period': 'Period',
-    'agency.format': 'Format',
     'agency.generateReport': 'Generiši izvještaj',
-    'agency.reportQueued':
-      'Izvještaj u {format} formatu je zatražen. Backend će ga generisati kada API bude spreman.',
+    'agency.reportsUnavailable':
+      'Izvještaji još nisu dostupni: uređaj ne šalje podatke iz kojih bi se napravili.',
     'agency.alarmsLabel': 'Alarmi',
     'agency.alarmsTitle':
       'Upozorenja o neuobičajenoj aktivnosti',
@@ -174,23 +183,16 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'agency.spikeThreshold':
       'Prag skoka saobraćaja: {percent}%',
     'agency.notifyByEmail': 'Obavijesti me emailom',
+    'agency.alarmsLocalOnly':
+      'Postavke se čuvaju samo u ovom pregledaču. Dok uređaj ne šalje podatke o saobraćaju, alarmi se ne aktiviraju i emailovi se ne šalju.',
     'agency.logLabel': 'Evidencija',
     'agency.logTitle': 'Istorija događaja',
     'agency.logDescription':
       'Događaji sa vremenskim pečatom, za potrebe sigurnosnog izvještavanja.',
-    'agency.levelInfo': 'Info',
-    'agency.levelWarning': 'Upozorenje',
-    'agency.levelAlert': 'Alarm',
-    'agency.eventSpike':
-      'Naglo povećanje saobraćaja iznad postavljenog praga.',
-    'agency.eventNewDevice':
-      'Novi uređaj se povezao na mrežu.',
-    'agency.eventBlocked':
-      'Blokiran pristup domenu sa liste rizika.',
-    'agency.eventUpdate':
-      'Sistemsko ažuriranje je instalirano.',
-    'agency.eventNightly':
-      'Noćna provjera sistema završena bez grešaka.',
+    'agency.noEvents':
+      'Nema događaja',
+    'agency.noEventsText':
+      'Uređaj još ne šalje evidenciju događaja.',
     'agency.legalNote':
       'Obim i trajanje čuvanja evidencije moraju biti usklađeni sa pravnim okvirom prije produkcije.',
 
@@ -199,6 +201,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Povećajte broj korisnika koje vaš Fornect uređaj podržava.',
     'upgrade.currentLabel': 'Trenutni plan',
     'upgrade.currentPlan': '{users} od {capacity} korisnika',
+    'upgrade.capacityNotReported':
+      'Uređaj ne prijavljuje kapacitet licence',
     'upgrade.description':
       'Kapacitet određuje koliko se uređaja može istovremeno povezati i biti zaštićeno.',
     'upgrade.currentTier': 'Vaš trenutni plan',
@@ -208,9 +212,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'upgrade.tierExtended':
       'Prošireni kapacitet za veće objekte i mreže.',
     'upgrade.pricingNote':
-      'Cijene i komercijalni uslovi još nisu definisani. Nakon zahtjeva kontaktiramo vas sa ponudom.',
-    'upgrade.requestSent':
-      'Zahtjev za nadogradnju na {users} korisnika je zabilježen. Kontaktiraćemo vas u vezi uslova.',
+      'Cijene i komercijalni uslovi još nisu definisani.',
+    'upgrade.requestNotConnected':
+      'Slanje zahtjeva iz aplikacije još nije povezano. Za nadogradnju na {users} korisnika javite se direktno Fornect timu.',
 
     'settings.deviceLabel': 'Uređaj',
     'settings.deviceMode': 'Softverski mod uređaja',
@@ -219,27 +223,18 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.deviceModeFromDevice':
       'Mod se postavlja na samom uređaju i ne mijenja se ovdje. Nalog bez uparenog uređaja je Home.',
 
-    'connection.label': 'Veza',
     'connection.offlineTitle': 'Fornect uređaj nije dostupan',
     'connection.offlineDescription':
       'Ne možemo trenutno doći do uređaja. Prikazano je posljednje poznato stanje, a promjene će se primijeniti kada se veza vrati.',
-    'connection.errorTitle': 'Greška u komunikaciji sa uređajem',
+    'connection.errorTitle': 'Greška u komunikaciji sa Fornect serverom',
     'connection.errorDescription':
-      'Uređaj je odgovorio greškom. Prikazano je posljednje poznato stanje.',
+      'Server trenutno ne odgovara, pa stanje uređaja nije potvrđeno. Prikazano je posljednje poznato stanje.',
     'connection.lastKnown': 'Posljednje poznato stanje: {time}',
     'connection.justNow': 'upravo sada',
     'connection.minutesAgo': 'prije {minutes} min',
     'connection.hoursAgo': 'prije {hours} h',
     'connection.neverSynced': 'nije još sinhronizovano',
     'connection.retry': 'Pokušaj ponovo',
-    'connection.statusOnline': 'Povezano',
-    'connection.statusOffline': 'Nije dostupno',
-    'connection.statusError': 'Greška',
-    'connection.simulateTitle': 'Stanje veze sa uređajem',
-    'connection.simulateDescription':
-      'Provjerite kako aplikacija izgleda kada uređaj nije dostupan ili vrati grešku.',
-    'connection.simulatePocNote':
-      'POC mod — u produkciji stanje veze dolazi iz odgovora backend API-ja, a ne bira se ručno.',
 
     'protection.platformAndroid':
       'Android telefon',
@@ -894,13 +889,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
 
     'pair.scanDeviceQr':
       'Skenirajte QR kod uređaja',
-    'pair.realCameraDescription':
-      'U pravoj aplikaciji ovdje će se otvoriti kamera i skenirati QR kod sa fizičkog Fornect uređaja.',
-    'pair.simulateQr': 'Skeniraj QR kod',
-    'pair.pocCamera':
-      'POC način rada — skeniranje kamerom bit će povezano kasnije. Unesite kod ručno.',
     'pair.qrNotAvailable':
       'Skeniranje kamerom još nije povezano — unesite kod ručno.',
+    'pair.enterCodeInstead':
+      'Unesi kod ručno',
 
     'pair.deviceSerial': 'Kod za uparivanje',
     'pair.digitLabel': 'Cifra {n} od 6',
@@ -1058,24 +1050,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
 
     'help.supportLabel': 'Podrška',
     'help.contactSupport': 'Kontaktirajte podršku',
-    'help.supportDescription':
-      'Opišite problem i Fornect podrška će moći pregledati vaš zahtjev.',
-    'help.category': 'Kategorija',
-    'help.categoryGeneral': 'Općenito',
-    'help.categoryDevice': 'Uređaj',
-    'help.categoryProtection': 'Zaštita',
-    'help.categorySchedule': 'Raspored',
-    'help.categoryAccount': 'Račun',
-    'help.message': 'Poruka',
-    'help.messagePlaceholder':
-      'Opišite problem ili pitanje...',
-    'help.messageTooShort':
-      'Molimo unesite najmanje 10 znakova.',
-    'help.sendRequest': 'Pošalji zahtjev',
-    'help.requestReceived':
-      'Zahtjev za podršku je zaprimljen.',
-    'help.pocNote':
-      'POC način rada — slanje zahtjeva će kasnije biti povezano sa backend servisom.',
+    'help.supportNotConnected':
+      'Slanje poruka podršci iz aplikacije još nije povezano, pa ovdje nema forme koja bi poruku samo progutala. Za pomoć se javite direktno Fornect timu.',
     'protectionOverview.childProfile': 'Dječiji profil',
     'protectionOverview.teenProfile': 'Tinejdžerski profil',
     'protectionOverview.adultProfile': 'Profil za odrasle',
@@ -1110,25 +1086,16 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.softwareUpdates': 'Ažuriranja softvera',
     'settings.softwareUpdatesDescription':
       'Obavijesti me kada je dostupno Fornect ažuriranje.',
+    'settings.emailNotConnected':
+      'Ove postavke se za sada čuvaju samo u ovom pregledaču. Slanje ovih emailova još nije povezano.',
     'settings.savePreferences': 'Sačuvaj postavke',
     'settings.security': 'Sigurnost',
     'settings.changePassword': 'Promijeni lozinku',
-    'settings.currentPassword': 'Trenutna lozinka',
-    'settings.newPassword': 'Nova lozinka',
-    'settings.confirmPassword': 'Potvrdi novu lozinku',
     'settings.fornectUser': 'Fornect korisnik',
-    'settings.demoNotice':
-      'Koristite Fornect demo račun. Lozinka ovog računa je fiksna u POC verziji.',
-    'settings.demoPasswordFixed':
-      'Lozinka demo računa ne može se promijeniti u ovoj POC verziji.',
-    'settings.enterCurrentPassword':
-      'Unesite trenutnu lozinku.',
-    'settings.passwordMin':
-      'Nova lozinka mora imati najmanje 8 znakova.',
-    'settings.passwordMismatch':
-      'Nove lozinke se ne podudaraju.',
-    'settings.passwordBackendReady':
-      'Promjena lozinke je spremna za povezivanje sa backendom.',
+    'settings.passwordNotConnected':
+      'Promjena lozinke direktno iz postavki još nije povezana sa serverom. Lozinku možete promijeniti kodom koji šaljemo na vaš email; nakon toga ćete biti odjavljeni sa svih uređaja.',
+    'settings.passwordResetLink':
+      'Promijeni lozinku putem emaila',
 
     'protectionOverview.guest': 'Osnovna zaštita',
     'consent.formTitle': 'Pristanak na punu zaštitu',
@@ -1213,6 +1180,14 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Fornect is active and monitoring your network.',
     'dashboard.pausedMessage':
       'Internet access is currently paused for all devices.',
+    'dashboard.deviceNotPaired':
+      'Fornect device is not paired',
+    'dashboard.deviceNotPairedText':
+      'Network protection starts once you pair a Fornect device. Until then the network is not protected.',
+    'dashboard.deviceOffline':
+      'Fornect device is offline',
+    'dashboard.deviceOfflineText':
+      'Protection is not confirmed right now. Check that the device is powered on and connected to the internet.',
     'dashboard.devicesOnline': 'Devices online',
     'dashboard.protectedDevices': 'Protected devices',
     'dashboard.childProfiles': 'Child profiles',
@@ -1298,6 +1273,14 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'pro.periodDay': 'Day',
     'pro.periodWeek': 'Week',
     'pro.periodMonth': 'Month',
+    'pro.capacityNotReported':
+      'The device does not report its licence capacity.',
+    'pro.noData':
+      'No data',
+    'pro.noLoadData':
+      'The device does not send this data yet',
+    'pro.noLoadDataText':
+      'Network load history (day, week, month) will appear once the Fornect device starts sending it.',
 
     'hospitality.title': 'Guest protection',
     'hospitality.subtitle':
@@ -1314,10 +1297,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'hospitality.noParentalControl':
       'Parental control and bedtime schedules are not available in this mode because they are not relevant for guests.',
     'hospitality.connectedNow': 'Connected now',
-    'hospitality.guestsToday': 'Guests today',
-    'hospitality.guestsThisWeek': 'Guests this week',
-    'hospitality.averageSession': 'Average session',
-    'hospitality.minutes': '{minutes} min',
+    'hospitality.guestHistory':
+      'Guests today, this week and average session',
+    'hospitality.noGuestStats':
+      'The device does not send this data yet.',
     'hospitality.privacyNote':
       'Statistics are aggregated. Individual guests are never identified or tracked.',
     'hospitality.splashLabel': 'Welcome page',
@@ -1337,22 +1320,15 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'agency.monitoringLabel': 'Monitoring',
     'agency.monitoringDescription':
       'Only metadata is shown: connection counts and traffic type. Communication content is never read or stored.',
-    'agency.totalConnections': '{count} connections in total',
-    'agency.connections': 'connections',
-    'agency.categoryWeb': 'Web traffic',
-    'agency.categoryStreaming': 'Streaming',
-    'agency.categorySocial': 'Social media',
-    'agency.categoryAds': 'Ads and trackers',
-    'agency.categoryOther': 'Other',
+    'agency.noTrafficStats':
+      'The device does not send traffic statistics yet',
+    'agency.noTrafficStatsText':
+      'Once the Fornect device starts sending statistics, connections by traffic type will appear here.',
     'agency.reportsLabel': 'Reports',
     'agency.reportsTitle': 'Generate a report',
-    'agency.reportsDescription':
-      'Choose the period and format of the report to download.',
-    'agency.period': 'Period',
-    'agency.format': 'Format',
     'agency.generateReport': 'Generate report',
-    'agency.reportQueued':
-      'A {format} report has been requested. The backend will generate it once the API is ready.',
+    'agency.reportsUnavailable':
+      'Reports are not available yet: the device does not send the data they would be built from.',
     'agency.alarmsLabel': 'Alarms',
     'agency.alarmsTitle': 'Unusual activity alerts',
     'agency.alarmsDescription':
@@ -1361,22 +1337,16 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'agency.spikeThreshold':
       'Traffic spike threshold: {percent}%',
     'agency.notifyByEmail': 'Notify me by email',
+    'agency.alarmsLocalOnly':
+      'These settings are stored in this browser only. Until the device sends traffic data, alarms do not trigger and no emails are sent.',
     'agency.logLabel': 'Event log',
     'agency.logTitle': 'Event history',
     'agency.logDescription':
       'Timestamped events, for security reporting purposes.',
-    'agency.levelInfo': 'Info',
-    'agency.levelWarning': 'Warning',
-    'agency.levelAlert': 'Alarm',
-    'agency.eventSpike':
-      'Traffic rose sharply above the configured threshold.',
-    'agency.eventNewDevice':
-      'A new device joined the network.',
-    'agency.eventBlocked':
-      'Access to a domain on the risk list was blocked.',
-    'agency.eventUpdate': 'A system update was installed.',
-    'agency.eventNightly':
-      'Nightly system check completed without errors.',
+    'agency.noEvents':
+      'No events',
+    'agency.noEventsText':
+      'The device does not send an event log yet.',
     'agency.legalNote':
       'Log scope and retention must be aligned with the legal framework before production.',
 
@@ -1385,6 +1355,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Increase the number of users your Fornect device supports.',
     'upgrade.currentLabel': 'Current plan',
     'upgrade.currentPlan': '{users} of {capacity} users',
+    'upgrade.capacityNotReported':
+      'The device does not report its licence capacity',
     'upgrade.description':
       'Capacity determines how many devices can connect and be protected at the same time.',
     'upgrade.currentTier': 'Your current plan',
@@ -1394,9 +1366,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'upgrade.tierExtended':
       'Extended capacity for larger properties and networks.',
     'upgrade.pricingNote':
-      'Pricing and commercial terms are not defined yet. We will contact you with an offer after your request.',
-    'upgrade.requestSent':
-      'An upgrade request for {users} users has been recorded. We will contact you about the terms.',
+      'Pricing and commercial terms have not been defined yet.',
+    'upgrade.requestNotConnected':
+      'Sending requests from the app is not connected yet. To upgrade to {users} users, contact the Fornect team directly.',
 
     'settings.deviceLabel': 'Device',
     'settings.deviceMode': 'Device software mode',
@@ -1405,27 +1377,18 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.deviceModeFromDevice':
       'The mode is set on the device itself and is not changed here. An account without a paired device is Home.',
 
-    'connection.label': 'Connection',
     'connection.offlineTitle': 'Fornect device is unreachable',
     'connection.offlineDescription':
       'We cannot reach the device right now. The last known state is shown, and changes will apply once the connection returns.',
-    'connection.errorTitle': 'Error communicating with the device',
+    'connection.errorTitle': 'Error communicating with the Fornect server',
     'connection.errorDescription':
-      'The device responded with an error. The last known state is shown.',
+      'The server is not responding right now, so the device state is not confirmed. The last known state is shown.',
     'connection.lastKnown': 'Last known state: {time}',
     'connection.justNow': 'just now',
     'connection.minutesAgo': '{minutes} min ago',
     'connection.hoursAgo': '{hours} h ago',
     'connection.neverSynced': 'not synced yet',
     'connection.retry': 'Try again',
-    'connection.statusOnline': 'Connected',
-    'connection.statusOffline': 'Unreachable',
-    'connection.statusError': 'Error',
-    'connection.simulateTitle': 'Device connection state',
-    'connection.simulateDescription':
-      'Check how the app looks when the device is unreachable or returns an error.',
-    'connection.simulatePocNote':
-      'POC mode - in production the connection state comes from the backend API response, not from a manual choice.',
 
     'protection.platformAndroid':
       'Android phone',
@@ -2078,13 +2041,10 @@ const translations: Record<AppLanguage, Record<string, string>> = {
 
     'pair.scanDeviceQr':
       'Scan device QR code',
-    'pair.realCameraDescription':
-      'In the real app this will open the camera and scan the QR code from the physical Fornect device.',
-    'pair.simulateQr': 'Scan QR code',
-    'pair.pocCamera':
-      'POC mode — camera scanning will be connected later. Enter the code manually.',
     'pair.qrNotAvailable':
       'Camera scanning isn\'t connected yet — enter the code manually.',
+    'pair.enterCodeInstead':
+      'Enter the code manually',
 
     'pair.deviceSerial': 'Pairing code',
     'pair.digitLabel': 'Digit {n} of 6',
@@ -2242,24 +2202,8 @@ const translations: Record<AppLanguage, Record<string, string>> = {
 
     'help.supportLabel': 'Support',
     'help.contactSupport': 'Contact support',
-    'help.supportDescription':
-      'Describe the problem so Fornect support can review your request.',
-    'help.category': 'Category',
-    'help.categoryGeneral': 'General',
-    'help.categoryDevice': 'Device',
-    'help.categoryProtection': 'Protection',
-    'help.categorySchedule': 'Schedule',
-    'help.categoryAccount': 'Account',
-    'help.message': 'Message',
-    'help.messagePlaceholder':
-      'Describe your problem or question...',
-    'help.messageTooShort':
-      'Please enter at least 10 characters.',
-    'help.sendRequest': 'Send request',
-    'help.requestReceived':
-      'Your support request has been received.',
-    'help.pocNote':
-      'POC mode — support submission will be connected to the backend service later.',
+    'help.supportNotConnected':
+      'Sending messages to support from the app is not connected yet, so there is no form here that would silently swallow your message. For help, contact the Fornect team directly.',
     'protectionOverview.childProfile': 'Child profile',
     'protectionOverview.teenProfile': 'Teen profile',
     'protectionOverview.adultProfile': 'Adult profile',
@@ -2294,25 +2238,16 @@ const translations: Record<AppLanguage, Record<string, string>> = {
     'settings.softwareUpdates': 'Software updates',
     'settings.softwareUpdatesDescription':
       'Notify me when a Fornect update is available.',
+    'settings.emailNotConnected':
+      'For now these settings are stored in this browser only. Sending these emails is not connected yet.',
     'settings.savePreferences': 'Save preferences',
     'settings.security': 'Security',
     'settings.changePassword': 'Change password',
-    'settings.currentPassword': 'Current password',
-    'settings.newPassword': 'New password',
-    'settings.confirmPassword': 'Confirm new password',
     'settings.fornectUser': 'Fornect user',
-    'settings.demoNotice':
-      'You are using the Fornect demo account. Its password is fixed in this POC.',
-    'settings.demoPasswordFixed':
-      'The demo account password cannot be changed in this POC.',
-    'settings.enterCurrentPassword':
-      'Enter your current password.',
-    'settings.passwordMin':
-      'New password must contain at least 8 characters.',
-    'settings.passwordMismatch':
-      'New passwords do not match.',
-    'settings.passwordBackendReady':
-      'Password change is ready for backend integration.',
+    'settings.passwordNotConnected':
+      'Changing the password directly from settings is not connected to the server yet. You can change it with a code we send to your email; afterwards you will be signed out on all devices.',
+    'settings.passwordResetLink':
+      'Change password by email',
 
     'protectionOverview.guest': 'Basic protection',
     'consent.formTitle': 'Consent to full protection',

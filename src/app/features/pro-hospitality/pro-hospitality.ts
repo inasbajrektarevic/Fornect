@@ -47,11 +47,10 @@ export class ProHospitality {
 
   saved = false;
 
-  // POC: statistika bez identifikacije pojedinačnih gostiju.
-  readonly guestsToday = 34;
-  readonly guestsThisWeek = 218;
-  readonly averageSessionMinutes = 42;
-
+  // Broj trenutno povezanih je stvaran: dolazi sa servera uz hub.
+  // Gosti danas / ove sedmice i prosječna sesija su ranije bili
+  // zakucani (34, 218, 42 min). Uređaj tu istoriju još ne šalje, pa
+  // ekran piše da je nema umjesto da je izmišlja.
   get connectedGuests(): number {
     return this.hubService.hub().connectedUsers;
   }

@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 
 import { API_BASE_URL } from '../config/api.config';
 import { AuthService } from './auth';
+import { ConnectionService } from './connection';
 
 export type HubKind = 'home' | 'pro';
 export type HubMode = 'home' | 'hospitality' | 'agency';
@@ -47,6 +48,15 @@ function toVersionMap(value: Record<string, unknown> | null | undefined): Record
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * Verzija softvera za prikaz: samo ono što je uređaj sam prijavio
+ * (fornectd). Server polje za verziju nema, pa bez prijave ostaje
+ * prazno — ekran tada piše da je uređaj ne prijavljuje.
+ */
+function reportedSoftwareVersion(versions: Record<string, string> | null | undefined): string {
+  return versions?.['fornectd'] ?? '';
+}
+
 interface HubApiResponse {
   id: string;
   name: string;
@@ -83,6 +93,11 @@ interface HubApiResponse {
 export class HubService {
   private readonly http = inject(HttpClient);
   private readonly authService = inject(AuthService);
+  // Stanje veze dolazi odavde, iz stvarnog odgovora GET /app/hub.
+  // ConnectionService zavisi samo od AuthService-a, pa kružne
+  // zavisnosti nema; "Pokušaj ponovo" se vraća ovamo preko
+  // registerRefresh, ne preko inject-a.
+  private readonly connectionService = inject(ConnectionService);
 
   readonly hub = signal<HubInfo>(this.load());
 
@@ -113,9 +128,22 @@ export class HubService {
   private generation = 0;
 
   constructor() {
+    this.connectionService.registerRefresh(() => this.refresh());
+
     if (this.authService.isAuthenticated()) {
       this.loaded = this.refreshFromApi();
     }
+  }
+
+  /** Ponovo pita server za stanje huba (npr. "Pokušaj ponovo"). */
+  refresh(): Promise<void> {
+    if (!this.authService.isAuthenticated()) {
+      return Promise.resolve();
+    }
+
+    this.loaded = this.refreshFromApi();
+
+    return this.loaded;
   }
 
   /**
@@ -146,20 +174,25 @@ export class HubService {
       }),
     );
 
+    const reportedVersions = toVersionMap(response.reported_versions);
+
     const hub: HubInfo = {
       ...this.hub(),
       name: response.name,
       serialNumber: response.id,
       kind: response.kind,
       mode: response.mode,
+      softwareVersion: reportedSoftwareVersion(reportedVersions),
       online: response.online,
       capacity: response.capacity ?? 0,
       connectedUsers: response.connected_devices,
+      reportedVersions,
       paired: true,
     };
 
     this.hub.set(hub);
     this.save(hub);
+    this.connectionService.setStatus(response.online ? 'online' : 'offline');
 
     // Upravo upareni hub je najnovije stanje; zahtjev koji je možda još
     // u letu (npr. 404 od prije uparivanja) se odbacuje.
@@ -174,38 +207,17 @@ export class HubService {
     this.loaded = this.refreshFromApi();
   }
 
-  getLoad(period: LoadPeriod): LoadPoint[] {
-    switch (period) {
-      case 'week':
-        return [
-          { label: 'Mon', value: 38 },
-          { label: 'Tue', value: 44 },
-          { label: 'Wed', value: 41 },
-          { label: 'Thu', value: 52 },
-          { label: 'Fri', value: 68 },
-          { label: 'Sat', value: 74 },
-          { label: 'Sun', value: 59 },
-        ];
-
-      case 'month':
-        return [
-          { label: 'W1', value: 42 },
-          { label: 'W2', value: 51 },
-          { label: 'W3', value: 63 },
-          { label: 'W4', value: 71 },
-        ];
-
-      default:
-        return [
-          { label: '00', value: 12 },
-          { label: '04', value: 8 },
-          { label: '08', value: 26 },
-          { label: '12', value: 44 },
-          { label: '16', value: 51 },
-          { label: '20', value: 63 },
-          { label: '24', value: 47 },
-        ];
-    }
+  /**
+   * Opterećenje mreže kroz vrijeme (Pro pregled).
+   *
+   * Ranije su ovdje stajali zakucani brojevi za dan, sedmicu i mjesec,
+   * pa je svaki Pro nalog vidio isti izmišljeni grafikon. Uređaj takvu
+   * istoriju još ne šalje, a server je ne čuva — zato je niz prazan i
+   * ekran piše da podataka nema. Kad backend dobije endpoint, ovdje se
+   * poziva on.
+   */
+  getLoad(_period: LoadPeriod): LoadPoint[] {
+    return [];
   }
 
   private async refreshFromApi(): Promise<void> {
@@ -220,37 +232,52 @@ export class HubService {
         return;
       }
 
+      const reportedVersions = toVersionMap(response.reported_versions);
+
       const hub: HubInfo = {
         ...this.hub(),
         name: response.name,
         serialNumber: response.id,
         kind: response.kind,
         mode: response.mode,
+        softwareVersion: reportedSoftwareVersion(reportedVersions),
         online: response.online,
         capacity: response.capacity ?? 0,
         connectedUsers: response.connected_devices,
-        reportedVersions: toVersionMap(response.reported_versions),
+        reportedVersions,
         paired: true,
       };
 
       this.hub.set(hub);
       this.save(hub);
+
+      // Server je odgovorio, pa je ovo stvarno stanje uređaja: online
+      // samo ako hub šalje heartbeat, inače offline.
+      this.connectionService.setStatus(response.online ? 'online' : 'offline');
     } catch (error) {
       if (generation !== this.generation) {
         return;
       }
 
+      const status = (error as { status?: number } | null)?.status;
+
       // 404: nalog nema uparen hub, pa je Home. Lokalni zapis se
       // briše, jer je mogao ostati Pro iz ranijeg POC prekidača moda u
       // Postavkama — i taj bi nalog inače i dalje vidio Pro panel.
-      if ((error as { status?: number } | null)?.status === 404) {
+      if (status === 404) {
         const accountId = this.authService.currentUser()?.accountId ?? 'anonymous';
 
         localStorage.removeItem(this.storageKey(accountId));
         this.hub.set(this.load());
+
+        // Nema uparenog uređaja, pa nema ni veze sa njim. Nije greška.
+        this.connectionService.setStatus('offline');
+        return;
       }
 
-      // Server nedostupan: ostaje ono što je zapamćeno od prošlog puta.
+      // Server nedostupan ili greška: ostaje ono što je zapamćeno od
+      // prošlog puta, a traka na ekranu kaže da podaci nisu svježi.
+      this.connectionService.setStatus('error');
     }
   }
 
@@ -273,23 +300,34 @@ export class HubService {
       try {
         const hub = JSON.parse(saved) as HubInfo;
 
-        if (hub.mode) {
-          return hub;
+        // Samo zapis stvarno uparenog huba vrijedi čuvati. Neupareni
+        // zapis je bila podrazumijevana vrijednost — u starijim
+        // verzijama sa izmišljenim serijskim brojem, verzijom i
+        // "online" stanjem — pa se zamjenjuje neutralnom.
+        if (hub.mode && hub.paired === true) {
+          return {
+            ...hub,
+            softwareVersion: reportedSoftwareVersion(hub.reportedVersions),
+          };
         }
       } catch {
         localStorage.removeItem(this.storageKey(accountId));
       }
     }
 
+    // Nalog bez uparenog huba: nema serijskog broja, verzije, veze ni
+    // kapaciteta. Ranije su ovdje stajali "FH-POC-001", "0.1.0",
+    // online, 20 mjesta i 4 korisnika — izmišljeni podaci koje je
+    // ekran prikazivao kao stanje uređaja.
     const fallback: HubInfo = {
       name: 'Fornect Home',
-      serialNumber: 'FH-POC-001',
+      serialNumber: '',
       kind: 'home',
       mode: 'home',
-      softwareVersion: '0.1.0',
-      online: true,
-      capacity: 20,
-      connectedUsers: 4,
+      softwareVersion: '',
+      online: false,
+      capacity: 0,
+      connectedUsers: 0,
       paired: false,
     };
 

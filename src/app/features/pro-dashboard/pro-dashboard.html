@@ -57,36 +57,47 @@
         {{ 'pro.capacityLabel' | translate }}
       </p>
 
-      <h2>
-        {{ hub.connectedUsers }} / {{ hub.capacity }}
-        {{ 'pro.users' | translate }}
-      </h2>
+      @if (hasCapacity) {
+        <h2>
+          {{ hub.connectedUsers }} / {{ hub.capacity }}
+          {{ 'pro.users' | translate }}
+        </h2>
 
-      <div class="capacity-bar">
-        <div
-          class="capacity-fill"
-          [class.warning]="nearCapacity"
-          [style.width.%]="capacityPercent">
+        <div class="capacity-bar">
+          <div
+            class="capacity-fill"
+            [class.warning]="nearCapacity"
+            [style.width.%]="capacityPercent">
+          </div>
         </div>
-      </div>
 
-      <p class="capacity-note">
-        {{
-          'pro.capacityUsed'
-            | translate:{ percent: capacityPercent }
-        }}
-      </p>
+        <p class="capacity-note">
+          {{
+            'pro.capacityUsed'
+              | translate:{ percent: capacityPercent }
+          }}
+        </p>
 
-      @if (nearCapacity) {
-        <div class="capacity-warning">
-          <strong>
-            {{ 'pro.nearLimitTitle' | translate }}
-          </strong>
+        @if (nearCapacity) {
+          <div class="capacity-warning">
+            <strong>
+              {{ 'pro.nearLimitTitle' | translate }}
+            </strong>
 
-          <p>
-            {{ 'pro.nearLimitDescription' | translate }}
-          </p>
-        </div>
+            <p>
+              {{ 'pro.nearLimitDescription' | translate }}
+            </p>
+          </div>
+        }
+      } @else {
+        <h2>
+          {{ hub.connectedUsers }}
+          {{ 'pro.users' | translate }}
+        </h2>
+
+        <p class="capacity-note">
+          {{ 'pro.capacityNotReported' | translate }}
+        </p>
       }
 
       <a routerLink="/pro/upgrade" class="primary-button">
@@ -102,76 +113,107 @@
 
       <div class="stat-card">
         <span>{{ 'pro.software' | translate }}</span>
-        <strong>{{ hub.softwareVersion }}</strong>
+        @if (hub.softwareVersion) {
+          <strong>{{ hub.softwareVersion }}</strong>
+        } @else {
+          <strong class="not-reported">
+            {{ 'dashboard.versionNotReported' | translate }}
+          </strong>
+        }
       </div>
 
       <div class="stat-card">
         <span>{{ 'pro.serialNumber' | translate }}</span>
-        <strong>{{ hub.serialNumber }}</strong>
+        <strong>{{ hub.serialNumber || '—' }}</strong>
       </div>
 
       <div class="stat-card">
         <span>{{ 'pro.peakLoad' | translate }}</span>
-        <strong>{{ peakLoad }}</strong>
+        @if (hasLoadData) {
+          <strong>{{ peakLoad }}</strong>
+        } @else {
+          <strong class="not-reported">
+            {{ 'pro.noData' | translate }}
+          </strong>
+        }
       </div>
     </section>
 
     <section class="chart-card">
-      <div class="card-heading">
-        <div>
-          <span class="card-label">
-            {{ 'pro.networkLoad' | translate }}
-          </span>
+      @if (hasLoadData) {
+        <div class="card-heading">
+          <div>
+            <span class="card-label">
+              {{ 'pro.networkLoad' | translate }}
+            </span>
 
-          <h3>
-            {{
-              'pro.averageUsers'
-                | translate:{ count: averageLoad }
-            }}
-          </h3>
+            <h3>
+              {{
+                'pro.averageUsers'
+                  | translate:{ count: averageLoad }
+              }}
+            </h3>
+          </div>
+
+          <div class="period-switch">
+            @for (item of periods; track item) {
+              <button
+                type="button"
+                [class.active]="period === item"
+                (click)="setPeriod(item)">
+                {{ periodLabelKey(item) | translate }}
+              </button>
+            }
+          </div>
         </div>
 
-        <div class="period-switch">
-          @for (item of periods; track item) {
-            <button
-              type="button"
-              [class.active]="period === item"
-              (click)="setPeriod(item)">
-              {{ periodLabelKey(item) | translate }}
-            </button>
-          }
+        <div class="chart">
+          <svg
+            viewBox="0 0 640 180"
+            role="img"
+            [attr.aria-label]="'pro.networkLoad' | translate">
+
+            <polyline
+              class="chart-area"
+              [attr.points]="chartArea" />
+
+            <polyline
+              class="chart-line"
+              [attr.points]="chartLine" />
+
+            @for (point of chartPoints; track point.label) {
+              <circle
+                class="chart-dot"
+                [attr.cx]="point.x"
+                [attr.cy]="point.y"
+                r="4" />
+            }
+          </svg>
+
+          <div class="chart-labels">
+            @for (point of chartPoints; track point.label) {
+              <span>{{ point.label }}</span>
+            }
+          </div>
         </div>
-      </div>
+      } @else {
+        <!-- Ranije je ovdje bio grafikon iz zakucanih brojeva. -->
+        <div class="card-heading">
+          <div>
+            <span class="card-label">
+              {{ 'pro.networkLoad' | translate }}
+            </span>
 
-      <div class="chart">
-        <svg
-          viewBox="0 0 640 180"
-          role="img"
-          [attr.aria-label]="'pro.networkLoad' | translate">
-
-          <polyline
-            class="chart-area"
-            [attr.points]="chartArea" />
-
-          <polyline
-            class="chart-line"
-            [attr.points]="chartLine" />
-
-          @for (point of chartPoints; track point.label) {
-            <circle
-              class="chart-dot"
-              [attr.cx]="point.x"
-              [attr.cy]="point.y"
-              r="4" />
-          }
-        </svg>
-
-        <div class="chart-labels">
-          @for (point of chartPoints; track point.label) {
-            <span>{{ point.label }}</span>
-          }
+            <h3>
+              {{ 'pro.noLoadData' | translate }}
+            </h3>
+          </div>
         </div>
-      </div>
+
+        <p class="empty-state">
+          {{ 'pro.noLoadDataText' | translate }}
+        </p>
+      }
     </section>
 
     <section class="actions">

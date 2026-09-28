@@ -102,69 +102,14 @@
   line-height: 1.6;
 }
 
-.support-card form {
-  display: grid;
-  gap: 18px;
+.support-notice {
   margin-top: 22px;
-}
-
-.support-card label {
-  display: grid;
-  gap: 8px;
-}
-
-.support-card label > span {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-select,
-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid #dce2e9;
+  padding: 14px 16px;
   border-radius: 10px;
-  padding: 12px 14px;
-  font: inherit;
-  background: #fff;
-}
-
-textarea {
-  resize: vertical;
-}
-
-select:focus,
-textarea:focus {
-  outline: 2px solid rgba(245, 130, 31, .18);
-  border-color: var(--fn-orange);
-}
-
-.primary-button {
-  justify-self: start;
-  border: 0;
-  border-radius: 10px;
-  padding: 12px 18px;
-  background: var(--fn-orange);
-  color: #fff;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.error-message {
-  color: #b42318;
-  font-weight: 700;
-}
-
-.success-message {
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: #ecfdf3;
-  color: #067647;
-  font-weight: 700;
-}
-
-.poc-note {
-  color: #98a2b3;
+  background: #fff7ed;
+  color: #8b5a27;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 @media (max-width: 700px) {
@@ -181,11 +126,3 @@ textarea:focus {
   }
 }
 
-
-/* Dodirne mete na telefonu. Apple i Google preporucuju najmanje
-   44px; na misu ostaje kako je bilo, jer tamo je precizniji. */
-@media (pointer: coarse) {
-  .primary-button {
-    min-height: 44px;
-  }
-}

@@ -116,84 +116,14 @@
         <h2>
           {{ 'help.contactSupport' | translate }}
         </h2>
-
-        <p>
-          {{ 'help.supportDescription' | translate }}
-        </p>
       </div>
 
-      <form (ngSubmit)="submitSupport()">
-
-        <label>
-          <span>
-            {{ 'help.category' | translate }}
-          </span>
-
-          <select
-            name="supportCategory"
-            [(ngModel)]="supportCategory">
-
-            <option value="general">
-              {{ 'help.categoryGeneral' | translate }}
-            </option>
-
-            <option value="device">
-              {{ 'help.categoryDevice' | translate }}
-            </option>
-
-            <option value="protection">
-              {{ 'help.categoryProtection' | translate }}
-            </option>
-
-            <option value="schedule">
-              {{ 'help.categorySchedule' | translate }}
-            </option>
-
-            <option value="account">
-              {{ 'help.categoryAccount' | translate }}
-            </option>
-          </select>
-        </label>
-
-        <label>
-          <span>
-            {{ 'help.message' | translate }}
-          </span>
-
-          <textarea
-            name="supportMessage"
-            rows="5"
-            [(ngModel)]="supportMessage"
-            [placeholder]="
-              'help.messagePlaceholder'
-                | translate
-            ">
-          </textarea>
-        </label>
-
-        @if (supportErrorKey) {
-          <div class="error-message">
-            {{ supportErrorKey | translate }}
-          </div>
-        }
-
-        @if (supportSubmitted) {
-          <div class="success-message">
-            {{ 'help.requestReceived' | translate }}
-          </div>
-        }
-
-        <button
-          type="submit"
-          class="primary-button">
-
-          {{ 'help.sendRequest' | translate }}
-        </button>
-
-        <small class="poc-note">
-          {{ 'help.pocNote' | translate }}
-        </small>
-      </form>
+      <!-- Ranije je ovdje bila forma koja je pisala "Zahtjev je
+           zaprimljen", a poruka nije išla nikome: backend za podršku ne
+           postoji. Bolje je reći to nego progutati korisnikov problem. -->
+      <div class="support-notice" role="note">
+        {{ 'help.supportNotConnected' | translate }}
+      </div>
     </section>
 
   </main>

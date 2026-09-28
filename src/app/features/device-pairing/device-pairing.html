@@ -82,23 +82,19 @@
             </h3>
 
             <p>
-              {{
-                'pair.realCameraDescription'
-                  | translate
-              }}
+              {{ 'pair.qrNotAvailable' | translate }}
             </p>
 
+            <!-- Skeniranje kamerom još nije povezano. Ranije je ovdje
+                 stajalo dugme "Skeniraj QR kod" koje ništa nije
+                 skeniralo; sada vodi pravo na ručni unos koda. -->
             <button
               type="button"
               class="primary-button"
-              (click)="simulateQrScan()">
+              (click)="selectMethod('serial')">
 
-              {{ 'pair.simulateQr' | translate }}
+              {{ 'pair.enterCodeInstead' | translate }}
             </button>
-
-            <small>
-              {{ 'pair.pocCamera' | translate }}
-            </small>
           </section>
 
         } @else {

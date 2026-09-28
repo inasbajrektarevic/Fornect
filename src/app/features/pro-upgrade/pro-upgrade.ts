@@ -27,7 +27,7 @@ export class ProUpgrade {
     { users: 500, descriptionKey: 'upgrade.tierExtended' }
   ];
 
-  requestSent = false;
+  /** Paket za koji je korisnik pitao; ništa se nigdje ne šalje. */
   selectedTier: CapacityTier | null = null;
 
   get currentCapacity(): number {
@@ -42,9 +42,12 @@ export class ProUpgrade {
     return tier.users === this.currentCapacity;
   }
 
+  /**
+   * Zahtjev za nadogradnju nema kamo otići: backend za to ne postoji.
+   * Ranije je ekran pisao da je zahtjev "zabilježen"; sada kaže da
+   * se korisnik javi Fornect timu direktno.
+   */
   requestUpgrade(tier: CapacityTier): void {
-    // POC: zahtjev ide prodaji kada backend bude spreman.
     this.selectedTier = tier;
-    this.requestSent = true;
   }
 }

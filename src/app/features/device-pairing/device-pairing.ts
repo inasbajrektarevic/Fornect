@@ -63,7 +63,9 @@ export class DevicePairing {
   private readonly changeDetector =
     inject(ChangeDetectorRef);
 
-  method: PairingMethod = 'qr';
+  // Ručni unos je podrazumijevan: skeniranje kamerom još nije
+  // povezano, pa kartica QR samo objašnjava to i vodi na unos koda.
+  method: PairingMethod = 'serial';
 
   /**
    * Kod za uparivanje, po cifri. Šest odvojenih polja umjesto jednog:
@@ -101,17 +103,6 @@ export class DevicePairing {
   selectMethod(method: PairingMethod): void {
     this.method = method;
     this.errorMessageKey = '';
-  }
-
-  /**
-   * QR kod (kad kamera skeniranje bude povezano) nosi isti pairing
-   * kod kao i ručni unos — oba puta na kraju zovu isti backend claim.
-   * Dok kamera nije povezana (POC), dugme traži da korisnik prvo
-   * pređe na ručni unos umjesto lažnog "uspjeha".
-   */
-  simulateQrScan(): void {
-    this.errorMessageKey = 'pair.qrNotAvailable';
-    this.method = 'serial';
   }
 
   async pairBySerial(): Promise<void> {
@@ -249,8 +240,7 @@ export class DevicePairing {
       selectedLanguage
     );
 
-    // Uređaje na mreži javlja sam Fornect uređaj (agent);
-    // ovdje se samo učita ono što je stvarno otkriveno.
+    // Učitava uređaje koje je upareni hub prijavio serveru.
     this.deviceService
       .refreshDevicesForCurrentAccount();
 

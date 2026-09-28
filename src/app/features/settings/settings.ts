@@ -3,10 +3,6 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../core/services/auth';
-import {
-  ConnectionService,
-  ConnectionStatus
-} from '../../core/services/connection';
 import { HubMode, HubService } from '../../core/services/hub';
 import {
   AppLanguage,
@@ -36,15 +32,7 @@ export class Settings {
   // Tajmer ispod mijenja obicno polje van klika; bez zone.js to ne
   // osvjezava ekran samo, pa poruka ne bi nestala.
   private readonly changeDetector = inject(ChangeDetectorRef);
-  private readonly connectionService =
-    inject(ConnectionService);
   private readonly hubService = inject(HubService);
-
-  readonly connectionStatuses: ConnectionStatus[] = [
-    'online',
-    'offline',
-    'error'
-  ];
   private readonly languageService = inject(LanguageService);
 
   readonly user = this.authService.currentUser();
@@ -53,38 +41,6 @@ export class Settings {
     this.loadPreferences();
 
   saved = false;
-
-  currentPassword = '';
-  newPassword = '';
-  confirmPassword = '';
-
-  passwordMessage = '';
-  passwordError = '';
-
-  get isDemoAccount(): boolean {
-    return this.user?.email === 'test@fornect.com';
-  }
-
-  get connectionStatus(): ConnectionStatus {
-    return this.connectionService.status();
-  }
-
-  connectionLabelKey(status: ConnectionStatus): string {
-    switch (status) {
-      case 'offline':
-        return 'connection.statusOffline';
-
-      case 'error':
-        return 'connection.statusError';
-
-      default:
-        return 'connection.statusOnline';
-    }
-  }
-
-  changeConnectionStatus(status: ConnectionStatus): void {
-    this.connectionService.setStatus(status);
-  }
 
   get hubMode(): HubMode {
     return this.hubService.mode();
@@ -127,52 +83,6 @@ export class Settings {
       this.saved = false;
       this.changeDetector.markForCheck();
     }, 2000);
-  }
-
-  changePassword(): void {
-    this.passwordMessage = '';
-    this.passwordError = '';
-
-    if (this.isDemoAccount) {
-      this.passwordError =
-        this.languageService.t(
-          'settings.demoPasswordFixed'
-        );
-      return;
-    }
-
-    if (!this.currentPassword) {
-      this.passwordError =
-        this.languageService.t(
-          'settings.enterCurrentPassword'
-        );
-      return;
-    }
-
-    if (this.newPassword.length < 8) {
-      this.passwordError =
-        this.languageService.t(
-          'settings.passwordMin'
-        );
-      return;
-    }
-
-    if (this.newPassword !== this.confirmPassword) {
-      this.passwordError =
-        this.languageService.t(
-          'settings.passwordMismatch'
-        );
-      return;
-    }
-
-    this.passwordMessage =
-      this.languageService.t(
-        'settings.passwordBackendReady'
-      );
-
-    this.currentPassword = '';
-    this.newPassword = '';
-    this.confirmPassword = '';
   }
 
   private loadPreferences(): AccountPreferences {

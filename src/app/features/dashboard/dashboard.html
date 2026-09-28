@@ -85,30 +85,22 @@
       </a>
     }
 
-    <section class="hero">
+    <section
+      class="hero"
+      [class.warning]="heroState === 'offline'"
+      [class.unpaired]="heroState === 'unpaired'"
+      data-testid="protection-status">
       <div>
         <p class="eyebrow">
           {{ 'dashboard.protectionStatus' | translate }}
         </p>
 
         <h2>
-          {{
-            (
-              networkPaused
-                ? 'dashboard.internetPaused'
-                : 'dashboard.networkProtected'
-            ) | translate
-          }}
+          {{ heroTitleKey | translate }}
         </h2>
 
         <p class="hero-text">
-          {{
-            (
-              networkPaused
-                ? 'dashboard.pausedMessage'
-                : 'dashboard.monitoring'
-            ) | translate
-          }}
+          {{ heroTextKey | translate }}
         </p>
       </div>
     </section>

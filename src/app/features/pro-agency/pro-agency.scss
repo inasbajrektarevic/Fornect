@@ -183,65 +183,34 @@
   }
 }
 
-.category-list {
+.empty-state {
   display: grid;
-  gap: 2px;
+  gap: 4px;
+  padding: 18px;
+  border: 1px dashed var(--fn-border-strong);
+  border-radius: 14px;
+  background: var(--fn-bg);
+  color: var(--fn-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.category-row {
-  display: grid;
-  grid-template-columns: 1.1fr 2fr auto;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 0;
-  border-top: 1px solid var(--fn-surface-muted);
-}
-
-.category-row:first-of-type {
-  border-top: none;
-}
-
-.category-text {
-  display: grid;
-  gap: 2px;
-}
-
-.category-text strong {
+.empty-state strong {
+  color: var(--fn-ink);
   font-size: 14px;
 }
 
-.category-text small {
-  font-size: 12px;
-  color: var(--fn-muted);
+.primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.category-bar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--fn-surface-muted);
-  overflow: hidden;
-}
-
-.category-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: var(--fn-ink);
-}
-
-.category-share {
-  font-size: 13px;
-  font-weight: 700;
-  color: #4b5563;
-}
-
-.report-form,
 .alarm-form {
   display: grid;
   gap: 14px;
   max-width: 460px;
 }
 
-.report-form label,
 .alarm-form label {
   display: grid;
   gap: 6px;
@@ -249,16 +218,10 @@
   font-weight: 600;
 }
 
-.report-form select,
 .alarm-form input[type='range'] {
   border-radius: 11px;
   font-size: 14px;
   font-family: inherit;
-}
-
-.report-form select {
-  border: 1px solid var(--fn-border-strong);
-  padding: 10px 12px;
 }
 
 .alarm-form input[type='range'] {
@@ -278,60 +241,8 @@
   accent-color: var(--fn-ink);
 }
 
-.report-form button,
 .alarm-form button {
   justify-self: start;
-}
-
-.event-log {
-  display: grid;
-  gap: 2px;
-}
-
-.event-row {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  align-items: center;
-  gap: 14px;
-  padding: 11px 0;
-  border-top: 1px solid var(--fn-surface-muted);
-  font-size: 13px;
-}
-
-.event-row:first-of-type {
-  border-top: none;
-}
-
-.event-time {
-  font-variant-numeric: tabular-nums;
-  color: var(--fn-muted);
-}
-
-.event-level {
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 11px;
-  font-weight: 700;
-  background: var(--fn-surface-muted);
-  color: #475569;
-}
-
-.event-level.warning {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.event-level.alert {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-@media (max-width: 700px) {
-  .category-row,
-  .event-row {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
 }
 
 /* Dodirne mete na telefonu. Apple i Google preporucuju najmanje

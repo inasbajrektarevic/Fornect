@@ -27,13 +27,17 @@
           </span>
 
           <h2>
-            {{
-              'upgrade.currentPlan'
-                | translate:{
-                    users: connectedUsers,
-                    capacity: currentCapacity
-                  }
-            }}
+            @if (currentCapacity > 0) {
+              {{
+                'upgrade.currentPlan'
+                  | translate:{
+                      users: connectedUsers,
+                      capacity: currentCapacity
+                    }
+              }}
+            } @else {
+              {{ 'upgrade.capacityNotReported' | translate }}
+            }
           </h2>
         </div>
       </div>
@@ -77,10 +81,10 @@
       }
     </section>
 
-    @if (requestSent && selectedTier) {
-      <div class="success-message">
+    @if (selectedTier) {
+      <div class="info-message" role="status">
         {{
-          'upgrade.requestSent'
+          'upgrade.requestNotConnected'
             | translate:{ users: selectedTier.users }
         }}
       </div>

@@ -4,6 +4,8 @@ import {
   ConnectionService
 } from '../../../core/services/connection';
 
+import { HubService } from '../../../core/services/hub';
+
 import {
   LanguageService
 } from '../../../core/services/language';
@@ -28,8 +30,20 @@ export class ConnectionBanner {
   private readonly languageService =
     inject(LanguageService);
 
+  // Inject HubService-a ujedno osigurava da je "Pokušaj ponovo"
+  // registrovan (HubService ga prijavljuje ConnectionService-u).
+  private readonly hubService = inject(HubService);
+
+  /**
+   * Traka ima smisla samo kad postoji uparen uređaj do kojeg se ne
+   * može doći. Nalog bez uređaja nema "posljednje poznato stanje" —
+   * to mu kaže kartica "Nijedan uređaj nije uparen".
+   */
   get visible(): boolean {
-    return this.connectionService.isStale();
+    return (
+      this.hubService.hub().paired === true &&
+      this.connectionService.isStale()
+    );
   }
 
   get isError(): boolean {
@@ -82,6 +96,6 @@ export class ConnectionBanner {
   }
 
   retry(): void {
-    this.connectionService.retry();
+    void this.connectionService.retry();
   }
 }

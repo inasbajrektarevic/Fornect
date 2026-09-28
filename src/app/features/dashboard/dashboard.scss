@@ -87,6 +87,35 @@
   color: var(--fn-border-strong);
 }
 
+/* Zaštita nije potvrđena: uređaj je offline ili server ne odgovara.
+   Ista narandžasta kao traka za nove uređaje — traži pažnju. */
+.hero.warning {
+  background: rgba(245, 130, 31, 0.08);
+  border: 1px solid rgba(245, 130, 31, 0.35);
+  color: var(--fn-ink);
+}
+
+.hero.warning .eyebrow {
+  color: var(--fn-orange);
+}
+
+/* Nema uparenog uređaja: nema ni zaštite, pa ni tamne "sve je u redu"
+   kartice. */
+.hero.unpaired {
+  background: #ffffff;
+  border: 1px solid var(--fn-border);
+  color: var(--fn-ink);
+}
+
+.hero.unpaired .eyebrow {
+  color: var(--fn-muted);
+}
+
+.hero.warning .hero-text,
+.hero.unpaired .hero-text {
+  color: var(--fn-muted);
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

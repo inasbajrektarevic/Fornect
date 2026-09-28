@@ -27,10 +27,7 @@
           </span>
 
           <h2>
-            {{
-              'agency.totalConnections'
-                | translate:{ count: totalConnections }
-            }}
+            {{ 'agency.noTrafficStats' | translate }}
           </h2>
         </div>
       </div>
@@ -39,32 +36,8 @@
         {{ 'agency.monitoringDescription' | translate }}
       </p>
 
-      <div class="category-list">
-        @for (category of categories; track category.key) {
-          <div class="category-row">
-            <div class="category-text">
-              <strong>
-                {{ category.key | translate }}
-              </strong>
-
-              <small>
-                {{ category.connections }}
-                {{ 'agency.connections' | translate }}
-              </small>
-            </div>
-
-            <div class="category-bar">
-              <div
-                class="category-fill"
-                [style.width.%]="category.share">
-              </div>
-            </div>
-
-            <span class="category-share">
-              {{ category.share }}%
-            </span>
-          </div>
-        }
+      <div class="empty-state">
+        {{ 'agency.noTrafficStatsText' | translate }}
       </div>
     </section>
 
@@ -81,56 +54,18 @@
         </div>
       </div>
 
+      <!-- Nema podataka iz kojih bi se izvještaj napravio, pa dugme ne
+           glumi da ga je "zatražilo". -->
       <p>
-        {{ 'agency.reportsDescription' | translate }}
+        {{ 'agency.reportsUnavailable' | translate }}
       </p>
 
-      <form class="report-form" (ngSubmit)="generateReport()">
-        <label>
-          <span>
-            {{ 'agency.period' | translate }}
-          </span>
-
-          <select
-            name="reportPeriod"
-            [(ngModel)]="reportPeriod">
-            <option value="day">
-              {{ 'pro.periodDay' | translate }}
-            </option>
-
-            <option value="week">
-              {{ 'pro.periodWeek' | translate }}
-            </option>
-
-            <option value="month">
-              {{ 'pro.periodMonth' | translate }}
-            </option>
-          </select>
-        </label>
-
-        <label>
-          <span>
-            {{ 'agency.format' | translate }}
-          </span>
-
-          <select
-            name="reportFormat"
-            [(ngModel)]="reportFormat">
-            <option value="pdf">PDF</option>
-            <option value="csv">CSV</option>
-          </select>
-        </label>
-
-        <button type="submit" class="primary-button">
-          {{ 'agency.generateReport' | translate }}
-        </button>
-      </form>
-
-      @if (reportMessage) {
-        <div class="success-message">
-          {{ reportMessage }}
-        </div>
-      }
+      <button
+        type="button"
+        class="primary-button"
+        disabled>
+        {{ 'agency.generateReport' | translate }}
+      </button>
     </section>
 
     <section class="card">
@@ -205,6 +140,10 @@
           </div>
         }
 
+        <p class="note">
+          {{ 'agency.alarmsLocalOnly' | translate }}
+        </p>
+
         <button type="submit" class="primary-button">
           {{ 'common.save' | translate }}
         </button>
@@ -228,23 +167,9 @@
         {{ 'agency.logDescription' | translate }}
       </p>
 
-      <div class="event-log">
-        @for (event of events; track event.time) {
-          <div class="event-row">
-            <span class="event-time">{{ event.time }}</span>
-
-            <span
-              class="event-level"
-              [class.warning]="event.level === 'warning'"
-              [class.alert]="event.level === 'alert'">
-              {{ levelKey(event.level) | translate }}
-            </span>
-
-            <span class="event-message">
-              {{ event.messageKey | translate }}
-            </span>
-          </div>
-        }
+      <div class="empty-state">
+        <strong>{{ 'agency.noEvents' | translate }}</strong>
+        {{ 'agency.noEventsText' | translate }}
       </div>
 
       <p class="note">
