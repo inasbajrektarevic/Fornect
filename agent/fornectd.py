@@ -54,7 +54,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -62,6 +62,11 @@ STATE_FILE = os.path.join(STATE_DIR, "agent.json")
 CONFIG_FILE = os.path.join(STATE_DIR, "config.json")
 DEVICE_NAME = os.environ.get("FORNECT_DEVICE_NAME", socket.gethostname())
 DEVICE_KIND = os.environ.get("FORNECT_DEVICE_KIND", "home")
+# Profil uređaja. "v1" = DNS filtriranje, scam, roditeljska kontrola
+# (proizvod koji isporučujemo). "v2" = sve to + MITM: captive portal,
+# pristanak i CA certifikat. V1 uređaj NE diže portal ni captive, jer
+# bi kupcu bez razloga otvarao ekran za certifikat.
+PROFILE = os.environ.get("FORNECT_PROFILE", "v1").lower()
 PIHOLE_DB = os.environ.get("FORNECT_PIHOLE_DB", "/etc/pihole/pihole-FTL.db")
 GRAVITY_DB = os.environ.get("FORNECT_GRAVITY_DB", "/etc/pihole/gravity.db")
 
@@ -1155,10 +1160,11 @@ def pull_config(state: dict) -> dict:
     api("POST", f"/devices/{state['device_id']}/config/ack", token=state["token"], body={"version": version})
     state["applied_config_version"] = version
     save_state(state)
-    try:
-        apply_bump_list()
-    except OSError as e:
-        log(f"Bump lista nije upisana: {e}")
+    if PROFILE == "v2":
+        try:
+            apply_bump_list()
+        except OSError as e:
+            log(f"Bump lista nije upisana: {e}")
     try:
         apply_filter_lists(cfg, state)
     except OSError as e:
@@ -1204,11 +1210,14 @@ def main() -> int:
 
     state = load_state()
     threading.Thread(target=dhcp_listener, daemon=True, name="dhcp").start()
-    start_portal()
-    try:
-        apply_bump_list()
-    except OSError as e:
-        log(f"Bump lista nije upisana: {e}")
+    if PROFILE == "v2":
+        start_portal()
+        try:
+            apply_bump_list()
+        except OSError as e:
+            log(f"Bump lista nije upisana: {e}")
+    else:
+        log("Profil v1: captive portal i MITM pristanak isključeni (DNS filtriranje radi).")
     backoff = 10
     last_stats_at = 0.0
     dns: dict | None = None
