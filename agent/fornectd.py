@@ -29,7 +29,8 @@ Veza između fizičkog uređaja i panela (admin.lukmandavran.cc):
   8. Imena (v0.5): sluša DHCP zahtjeve na mreži (ime i tip sistema koje
      uređaj sam pošalje pri spajanju) -> pravo ime u panelu umjesto MAC-a.
 
-Liste za filtriranje iz konfiguracije se još NE primjenjuju na Pi-hole.
+Liste za filtriranje iz konfiguracije se primjenjuju na Pi-hole (v0.6):
+upišu se u gravity.db kao Fornect adliste i pozove se `pihole -g`.
 
 Samo standardna Python biblioteka (Python >= 3.9), bez pip paketa.
 
@@ -43,6 +44,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -52,7 +54,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.5.1"
+VERSION = "0.6.0"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -61,6 +63,7 @@ CONFIG_FILE = os.path.join(STATE_DIR, "config.json")
 DEVICE_NAME = os.environ.get("FORNECT_DEVICE_NAME", socket.gethostname())
 DEVICE_KIND = os.environ.get("FORNECT_DEVICE_KIND", "home")
 PIHOLE_DB = os.environ.get("FORNECT_PIHOLE_DB", "/etc/pihole/pihole-FTL.db")
+GRAVITY_DB = os.environ.get("FORNECT_GRAVITY_DB", "/etc/pihole/gravity.db")
 
 HEARTBEAT_INTERVAL = int(os.environ.get("FORNECT_HEARTBEAT_SECONDS", "60"))
 STATS_INTERVAL = 300  # DNS brojke iz baze se računaju rjeđe (skupo na 512 MB)
@@ -628,6 +631,101 @@ def apply_bump_list() -> None:
     )
 
 
+# ------------------------------------------------- filter liste (Pi-hole)
+#
+# Panel šalje `filter_lists.urls` (adliste koje uređaj treba vrtiti) i
+# `filter_lists.set_id` (koji je to set, za historiju/rollback). Mi te
+# adrese upišemo u Pi-hole gravity.db i pozovemo `pihole -g` da izgradi
+# gravitaciju. Diramo SAMO redove koje je Fornect upisao (comment
+# 'fornect-managed'); adliste koje bi vlasnik ručno dodao ostaju.
+#
+# Prazan `urls` znači "panel nema šta reći o listama" — tada se NE dira
+# ništa, uređaj ostaje na postojećem setu. Prazan niz NIJE "ugasi
+# filtriranje" (to bi bila zaštita ugašena greškom u panelu).
+#
+# `pihole -g` povlači liste s interneta i zna trajati, pa ide u zasebnoj
+# niti; glavna petlja (heartbeat, prisutnost) se ne zaustavlja.
+
+FORNECT_ADLIST_TAG = "fornect-managed"
+_gravity_lock = threading.Lock()
+
+# Dozvoljen oblik adrese adliste. URL u SQL ide kroz ovu provjeru, pa
+# nema potrebe bježati navodnike — sve što nije čist http(s) URL se
+# odbaci prije upisa.
+_URL_RE = re.compile(r"^https?://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+$")
+
+
+def _gravity_sql(sql: str) -> bool:
+    """Izvrši SQL nad gravity.db. True ako je prošlo."""
+    return run(["pihole-FTL", "sqlite3", GRAVITY_DB, sql]) is not None
+
+
+def _rebuild_gravity(set_id: str | None, count: int) -> None:
+    """U zasebnoj niti: `pihole -g` izgradi gravitaciju iz adlista."""
+    with _gravity_lock:
+        ok = run(["pihole", "-g"]) is not None
+    log(
+        f"Filter liste primijenjene: {count} adlista (set {set_id or '-'}), "
+        + ("gravitacija izgrađena." if ok else "ali `pihole -g` NIJE uspio.")
+    )
+
+
+def apply_filter_lists(cfg: dict, state: dict) -> None:
+    """Upiše adliste iz konfiguracije u gravity.db i pokrene rebuild.
+
+    Radi samo kad se set stvarno promijenio (potpis u state-u), i samo
+    nad redovima koje je Fornect upisao.
+    """
+    flt = cfg.get("filter_lists") or {}
+    raw_urls = flt.get("urls") or []
+    set_id = flt.get("set_id")
+
+    # Prazno => panel ne govori o listama => ne diramo ništa.
+    if not raw_urls:
+        return
+
+    urls = sorted({u.strip() for u in raw_urls if isinstance(u, str) and _URL_RE.match(u.strip())})
+    dropped = len(raw_urls) - len(urls)
+    if dropped:
+        log(f"Filter liste: {dropped} neispravnih URL-ova preskočeno.")
+    if not urls:
+        log("Filter liste: nijedan URL nije ispravan, ne mijenjam gravity.db.")
+        return
+
+    sig = f"{set_id}|" + "\n".join(urls)
+    if state.get("applied_lists_sig") == sig:
+        return
+
+    if not os.path.exists(GRAVITY_DB):
+        log(f"Filter liste: {GRAVITY_DB} ne postoji, preskačem (dev okruženje?).")
+        return
+
+    tag = FORNECT_ADLIST_TAG
+    values = ",".join(f"('{u}',1,'{tag}')" for u in urls)
+    keep = ",".join(f"'{u}'" for u in urls)
+    stmts = [
+        # Ukloni Fornect adliste kojih više nema u setu.
+        f"DELETE FROM adlist WHERE comment='{tag}' AND address NOT IN ({keep});",
+        # Dodaj nove; postojeće ostaju (address je UNIQUE).
+        f"INSERT OR IGNORE INTO adlist (address,enabled,comment) VALUES {values};",
+        # Osiguraj da su sve Fornect adliste uključene.
+        f"UPDATE adlist SET enabled=1 WHERE comment='{tag}' AND address IN ({keep});",
+    ]
+    for sql in stmts:
+        if not _gravity_sql(sql):
+            log("Filter liste: upis u gravity.db NIJE uspio, rebuild se ne pokreće.")
+            return
+
+    state["applied_lists_sig"] = sig
+    save_state(state)
+    threading.Thread(
+        target=_rebuild_gravity,
+        args=(set_id, len(urls)),
+        daemon=True,
+        name="gravity",
+    ).start()
+
+
 def portal_classify(mac: str, body: dict) -> tuple[int, dict]:
     target = body.get("state")
     with _portal_lock:
@@ -1052,8 +1150,7 @@ def pull_config(state: dict) -> dict:
     ota = cfg.get("ota") or {}
     log(
         f"Nova konfiguracija v{version}: {len(macs)} consented MAC, "
-        f"{len(lists)} filter lista, OTA prsten={ota.get('ring')} pauza={ota.get('paused')}. "
-        "(consented_macs -> Squid; liste još ne)"
+        f"{len(lists)} filter lista, OTA prsten={ota.get('ring')} pauza={ota.get('paused')}."
     )
     api("POST", f"/devices/{state['device_id']}/config/ack", token=state["token"], body={"version": version})
     state["applied_config_version"] = version
@@ -1062,6 +1159,10 @@ def pull_config(state: dict) -> dict:
         apply_bump_list()
     except OSError as e:
         log(f"Bump lista nije upisana: {e}")
+    try:
+        apply_filter_lists(cfg, state)
+    except OSError as e:
+        log(f"Filter liste nisu primijenjene: {e}")
     return state
 
 

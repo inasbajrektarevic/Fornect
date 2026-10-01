@@ -3,7 +3,7 @@
 Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 `https://admin.lukmandavran.cc/api/v1`. Samo standardna Python biblioteka.
 
-## Šta radi (v0.5)
+## Šta radi (v0.6)
 
 | Korak | Ruta | Status |
 |---|---|---|
@@ -19,7 +19,7 @@ Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 | consented_macs iz konfiguracije → Squid bump lista | `/etc/squid/fornect/bump-macs.txt` + `squid -k reconfigure` | radi (v0.3) |
 | Portal se sam otvara novom uređaju na WiFi-ju (captive detekcija na :80) | Pi-hole `dns.hosts` → uređaj | radi (v0.4) |
 | Pravo ime uređaja (iz DHCP zahtjeva koje uređaj pošalje pri spajanju, port 67, samo sluša) | `device.new` s imenom; backend ga upiše samo dok je ime još MAC | radi (v0.5) |
-| Primjena lista za filtriranje na Pi-hole | — | **nije urađeno** |
+| Primjena lista za filtriranje na Pi-hole (gravity.db + `pihole -g`) | `GET /devices/:id/config` → gravity.db | radi (v0.6) |
 
 Token je u `/etc/fornect/agent.json` (0600, root). Nikad se ne ispisuje.
 Primljena konfiguracija: `/etc/fornect/config.json`.
