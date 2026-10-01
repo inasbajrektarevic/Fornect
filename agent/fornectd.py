@@ -54,7 +54,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -652,7 +652,13 @@ def apply_bump_list() -> None:
 # niti; glavna petlja (heartbeat, prisutnost) se ne zaustavlja.
 
 FORNECT_ADLIST_TAG = "fornect-managed"
+# `pihole -g` skida sve adliste i gradi bazu; na Orange Pi Zero sa 6+
+# lista to traje i nekoliko minuta. Opšti CMD_TIMEOUT (20 s) ga je
+# prekidao usred posla (v0.6.0), pa rebuild ima svoj rok.
+GRAVITY_TIMEOUT = 900
+GRAVITY_RETRY_SECONDS = 900
 _gravity_lock = threading.Lock()
+_gravity_state: dict = {"running": False, "failed_at": None, "set_id": None, "count": 0}
 
 # Dozvoljen oblik adrese adliste. URL u SQL ide kroz ovu provjeru, pa
 # nema potrebe bježati navodnike — sve što nije čist http(s) URL se
@@ -666,13 +672,67 @@ def _gravity_sql(sql: str) -> bool:
 
 
 def _rebuild_gravity(set_id: str | None, count: int) -> None:
-    """U zasebnoj niti: `pihole -g` izgradi gravitaciju iz adlista."""
+    """U zasebnoj niti: `pihole -g` izgradi gravitaciju iz adlista.
+
+    Ako ne uspije, stara gravitacija ostaje aktivna (Pi-hole gradi u
+    privremenu tabelu), a glavna petlja pokuša ponovo nakon
+    GRAVITY_RETRY_SECONDS.
+    """
+    detail = ""
     with _gravity_lock:
-        ok = run(["pihole", "-g"]) is not None
+        try:
+            proc = subprocess.run(
+                ["pihole", "-g"], capture_output=True, text=True, timeout=GRAVITY_TIMEOUT
+            )
+            ok = proc.returncode == 0
+            if not ok:
+                tail = ((proc.stderr or "") + (proc.stdout or "")).strip().splitlines()
+                detail = f" (izlaz {proc.returncode}: {tail[-1] if tail else 'bez poruke'})"
+        except subprocess.TimeoutExpired:
+            ok = False
+            detail = f" (prekinuto nakon {GRAVITY_TIMEOUT} s)"
+        except OSError as e:
+            ok = False
+            detail = f" ({e})"
+        _gravity_state.update(
+            running=False,
+            failed_at=None if ok else time.monotonic(),
+            set_id=set_id,
+            count=count,
+        )
     log(
         f"Filter liste primijenjene: {count} adlista (set {set_id or '-'}), "
-        + ("gravitacija izgrađena." if ok else "ali `pihole -g` NIJE uspio.")
+        + (
+            "gravitacija izgrađena."
+            if ok
+            else f"ali `pihole -g` NIJE uspio{detail}. Ponovo za {GRAVITY_RETRY_SECONDS // 60} min."
+        )
     )
+
+
+def start_gravity_rebuild(set_id: str | None, count: int) -> None:
+    """Pokrene rebuild u pozadini, osim ako jedan već radi."""
+    if _gravity_state["running"]:
+        return
+    _gravity_state["running"] = True
+    threading.Thread(
+        target=_rebuild_gravity,
+        args=(set_id, count),
+        daemon=True,
+        name="gravity",
+    ).start()
+
+
+def retry_gravity_if_needed() -> None:
+    """Zove ga glavna petlja: ponovi neuspjeli rebuild nakon pauze."""
+    failed_at = _gravity_state["failed_at"]
+    if (
+        failed_at is not None
+        and not _gravity_state["running"]
+        and time.monotonic() - failed_at > GRAVITY_RETRY_SECONDS
+    ):
+        log("Filter liste: ponovni pokušaj izgradnje gravitacije.")
+        start_gravity_rebuild(_gravity_state["set_id"], _gravity_state["count"])
 
 
 def apply_filter_lists(cfg: dict, state: dict) -> None:
@@ -723,12 +783,7 @@ def apply_filter_lists(cfg: dict, state: dict) -> None:
 
     state["applied_lists_sig"] = sig
     save_state(state)
-    threading.Thread(
-        target=_rebuild_gravity,
-        args=(set_id, len(urls)),
-        daemon=True,
-        name="gravity",
-    ).start()
+    start_gravity_rebuild(set_id, len(urls))
 
 
 def portal_classify(mac: str, body: dict) -> tuple[int, dict]:
@@ -1232,6 +1287,7 @@ def main() -> int:
                 last_stats_at = time.monotonic()
             heartbeat(state, dns)
             state = pull_config(state)
+            retry_gravity_if_needed()
             try:
                 state = report_lan(state)
                 if not state.get("paired"):
