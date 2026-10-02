@@ -1037,6 +1037,21 @@ test('23 - a wrong verification code is rejected', async ({ page }) => {
 
   const realCode = await readVerificationCode(email);
 
+  // Mail ima i HTML verziju (services/mailer.ts), sa istim kodom. Samo
+  // tekst je filterima za spam manje uobicajen od teksta + HTML-a.
+  const safeEmail = email.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const mailFile = fs
+    .readdirSync(MAIL_OUTBOX)
+    .filter((name) => name.includes(safeEmail))
+    .sort()
+    .pop()!;
+  const sentMail = JSON.parse(fs.readFileSync(path.join(MAIL_OUTBOX, mailFile), 'utf8')) as {
+    html?: string;
+  };
+
+  expect(sentMail.html).toContain('<!doctype html>');
+  expect(sentMail.html).toContain(realCode);
+
   const wrongCode = realCode === '000000' ? '111111' : '000000';
 
   const rejected = await page.request.post('/api/v1/auth/verify-email', {
