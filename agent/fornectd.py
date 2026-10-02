@@ -54,7 +54,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.7.0"
+VERSION = "0.7.1"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -810,8 +810,11 @@ THREAT_MAX_EVENTS = 20
 # Ime domene iz DNS upita ide u SQL i u tekst za roditelja, pa prolazi
 # samo ono što je stvarno ime domene (bez navodnika, razmaka...).
 _DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$")
+# ~1 sat pokušaja (krug je ~60 s), dovoljno da se backend deploya.
+THREAT_MAX_TRIES = 60
 _threat_sent: set[str] = set()
 _threat_sent_day = ""
+_threat_pending: dict[str, dict] = {}
 
 
 def _sqlite_ro(db: str, sql: str) -> str | None:
@@ -888,7 +891,7 @@ def scan_threats(state: dict) -> dict:
         f"ORDER BY id LIMIT {THREAT_SCAN_MAX_ROWS};",
     )
     if out is None:
-        return state
+        return flush_threats(state)
 
     rows = []
     max_id = int(last)
@@ -912,18 +915,17 @@ def scan_threats(state: dict) -> dict:
         save_state(state)
 
     if not rows:
-        return state
+        return flush_threats(state)
 
     hits = scam_domains({d for _, d, _ in rows}, scam_adlist_ids())
     if not hits:
-        return state
+        return flush_threats(state)
 
     today = dt.date.today().isoformat()
     if today != _threat_sent_day:
         _threat_sent.clear()
         _threat_sent_day = today
 
-    events = []
     for ts, domain, ip in rows:
         if domain not in hits:
             continue
@@ -931,30 +933,55 @@ def scan_threats(state: dict) -> dict:
         if not mac:
             continue  # bez MAC-a ne znamo čiji je uređaj
         event_id = f"threat:{mac}:{domain}:{today}"
-        if event_id in _threat_sent:
+        if event_id in _threat_sent or event_id in _threat_pending:
             continue
-        _threat_sent.add(event_id)
-        events.append({
-            "event_id": event_id,
-            "type": "threat.blocked",
-            "mac": mac,
-            "domain": domain,
-            "at": dt.datetime.fromtimestamp(ts, dt.timezone.utc).isoformat(timespec="seconds"),
-        })
-        if len(events) >= THREAT_MAX_EVENTS:
-            break
+        _threat_pending[event_id] = {
+            "event": {
+                "event_id": event_id,
+                "type": "threat.blocked",
+                "mac": mac,
+                "domain": domain,
+                "at": dt.datetime.fromtimestamp(ts, dt.timezone.utc).isoformat(timespec="seconds"),
+            },
+            "tries": 0,
+        }
+    return flush_threats(state)
 
-    if events:
-        try:
-            send_events(events)
-            log(f"Prevare: {len(events)} zaustavljenih domena javljeno panelu "
-                f"({', '.join(e['domain'] for e in events[:3])}{'…' if len(events) > 3 else ''}).")
-        except ApiError as e:
-            if e.status != 409:
-                # Vrati ih u red za sljedeći krug.
-                for e2 in events:
-                    _threat_sent.discard(e2["event_id"])
-                raise
+
+def flush_threats(state: dict) -> dict:
+    """Pošalje događaje iz reda. Ostaju u redu dok ih backend ne
+    prihvati (applied/duplicate) — npr. dok se backend tek deploya."""
+    if not _threat_pending:
+        return state
+    batch = list(_threat_pending.values())[:THREAT_MAX_EVENTS]
+    events = [b["event"] for b in batch]
+    try:
+        results = send_events(events)
+    except ApiError as e:
+        if e.status == 409:
+            return state  # još nije uparen; red čeka
+        raise
+    by_id = {r.get("event_id"): r for r in results}
+    ok, rejected = [], []
+    for b in batch:
+        ev = b["event"]
+        r = by_id.get(ev["event_id"]) or {}
+        if r.get("status") in ("applied", "duplicate"):
+            _threat_pending.pop(ev["event_id"], None)
+            _threat_sent.add(ev["event_id"])
+            ok.append(ev)
+        else:
+            b["tries"] += 1
+            rejected.append(r.get("reason") or "bez odgovora")
+            if b["tries"] >= THREAT_MAX_TRIES:
+                _threat_pending.pop(ev["event_id"], None)
+                log(f"Prevare: odustajem od {ev['domain']} nakon {b['tries']} pokušaja ({rejected[-1]}).")
+    if ok:
+        log(f"Prevare: {len(ok)} zaustavljenih domena javljeno panelu "
+            f"({', '.join(ev['domain'] for ev in ok[:3])}{'…' if len(ok) > 3 else ''}).")
+    if rejected:
+        log(f"Prevare: backend nije prihvatio {len(rejected)} događaja "
+            f"({'; '.join(sorted(set(rejected)))}). Ponovo u sljedećem krugu.")
     return state
 
 
