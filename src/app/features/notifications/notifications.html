@@ -99,6 +99,9 @@
               "
               [class.notification-icon--consent]="
                 notification.type === 'consent'
+              "
+              [class.notification-icon--threat]="
+                notification.type === 'threat'
               ">
 
               @switch (notification.type) {
@@ -124,6 +127,10 @@
 
                 @case ('consent') {
                   !
+                }
+
+                @case ('threat') {
+                  ⛨
                 }
               }
             </div>

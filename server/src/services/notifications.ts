@@ -31,7 +31,8 @@ export type NotificationType =
   | 'protection'
   | 'capacity'
   | 'new-device'
-  | 'consent';
+  | 'consent'
+  | 'threat';
 
 export interface NotificationRow {
   id: string;
@@ -216,6 +217,36 @@ export async function recordNewDeviceNotice(
     messageKey: 'notifications.newDeviceMessage',
     params: { name, mac },
     dedupeKey: `new-device:${mac}`,
+    networkDeviceId,
+  });
+}
+
+/**
+ * Hub je zaustavio domenu sa liste poznatih prevara/phishinga.
+ *
+ * Jedno obavještenje po (uređaj, domena, dan): lažna stranica napravi
+ * desetine DNS upita u sekundi, a roditelj treba jednu jasnu poruku.
+ * Sutra, ako se isto desi ponovo, to je nov događaj i smije nastati.
+ *
+ * Tekst namjerno ne tvrdi više nego što znamo: domena je na listi
+ * prevara i blokirana je. Ne znamo da li je dijete kliknulo na link iz
+ * poruke ili je stranica sama učitana u pozadini.
+ */
+export async function recordThreatNotice(
+  client: PoolClient,
+  accountId: string,
+  networkDeviceId: string | null,
+  mac: string,
+  name: string,
+  domain: string,
+  day: string,
+): Promise<void> {
+  await createNotification(client, accountId, {
+    type: 'threat',
+    titleKey: 'notifications.threatTitle',
+    messageKey: 'notifications.threatMessage',
+    params: { name, mac, domain },
+    dedupeKey: `threat:${mac}:${domain}:${day}`,
     networkDeviceId,
   });
 }

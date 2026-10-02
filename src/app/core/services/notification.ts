@@ -11,7 +11,8 @@ export type NotificationType =
   | 'protection'
   | 'capacity'
   | 'new-device'
-  | 'consent';
+  | 'consent'
+  | 'threat';
 
 export interface FornectNotification {
   id: string;

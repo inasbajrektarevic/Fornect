@@ -641,6 +641,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Dostignut je limit kapaciteta',
     'notifications.capacityMessage':
       'Vaš Fornect uređaj podržava najviše {capacity} uređaja. Novi uređaji se neće moći dodati dok se neki ne ukloni.',
+    'notifications.threatTitle': 'Zaustavljena opasna stranica',
+    'notifications.threatMessage':
+      'Na uređaju „{name}" blokirali smo stranicu {domain}. Nalazi se na listi poznatih prevara i phishing stranica, pa nije otvorena.',
     'notifications.newDeviceTitle': 'Nov uređaj na mreži',
     'notifications.newDeviceMessage':
       'Uređaj „{name}" ({mac}) se pojavio na mreži i čeka vašu odluku. Do tada ima osnovnu zaštitu.',
@@ -1795,6 +1798,9 @@ const translations: Record<AppLanguage, Record<string, string>> = {
       'Capacity limit reached',
     'notifications.capacityMessage':
       'Your Fornect device supports up to {capacity} devices. New devices cannot be added until one is removed.',
+    'notifications.threatTitle': 'Dangerous site stopped',
+    'notifications.threatMessage':
+      'On the device “{name}” we blocked {domain}. It is on a list of known scam and phishing sites, so it was not opened.',
     'notifications.newDeviceTitle': 'New device on the network',
     'notifications.newDeviceMessage':
       'The device “{name}” ({mac}) appeared on the network and is waiting for your decision. Until then it has basic protection.',

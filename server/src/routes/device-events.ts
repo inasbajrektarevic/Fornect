@@ -35,14 +35,19 @@ import {
 } from '../services/consent-actions';
 
 import { normaliseMac } from '../services/mac';
-import { recordNewDeviceNotice, syncCapacityNotice } from '../services/notifications';
+import {
+  recordNewDeviceNotice,
+  recordThreatNotice,
+  syncCapacityNotice,
+} from '../services/notifications';
 
 type EventType =
   | 'device.new'
   | 'device.classified'
   | 'consent.revoked'
   | 'consent.verified'
-  | 'consent.verify_failed';
+  | 'consent.verify_failed'
+  | 'threat.blocked';
 
 interface HubEvent {
   event_id?: string;
@@ -61,6 +66,9 @@ interface HubEvent {
   };
   reason?: string;
   error?: string;
+  // threat.blocked
+  domain?: string;
+  list?: string;
 }
 
 interface EventsBody {
@@ -79,6 +87,7 @@ const KNOWN_TYPES: EventType[] = [
   'consent.revoked',
   'consent.verified',
   'consent.verify_failed',
+  'threat.blocked',
 ];
 
 // Paket koji je prevelik znači da je hub predugo bio bez veze; bolje
@@ -217,6 +226,12 @@ async function handle(
     return handleNewDevice(client, hubId, accountId, mac, event);
   }
 
+  // Zaustavljena prevara ne traži da je uređaj već zaveden: hub zna
+  // samo MAC, a obavijest mora stići i za uređaj koji se tek spojio.
+  if (type === 'threat.blocked') {
+    return handleThreatBlocked(client, accountId, mac, event);
+  }
+
   const device = await loadDeviceByMac(client, accountId, mac);
 
   if (!device) {
@@ -334,6 +349,59 @@ async function handleNewDevice(
       event.name?.trim() || mac,
     );
   }
+
+  return null;
+}
+
+// Domena kako je hub vidi u DNS upitu. Ne prihvatamo ništa što nije
+// ime domene — ide u tekst obavještenja koji vidi roditelj.
+const DOMAIN_RE = /^(?=.{1,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/;
+
+/**
+ * Hub je blokirao domenu sa liste poznatih prevara (fornectd v0.7).
+ *
+ * event_id koji šalje hub već sadrži (MAC, domena, dan), pa se isti
+ * paket poslan dva puta odbije na ledger-u. dedupe_key obavještenja
+ * dodatno čuva od dva hub-a/dva event_id-a za isti događaj.
+ */
+async function handleThreatBlocked(
+  client: PoolClient,
+  accountId: string,
+  mac: string,
+  event: HubEvent,
+): Promise<string | null> {
+  const domain = event.domain?.trim().toLowerCase().replace(/\.$/, '');
+
+  if (!domain || !DOMAIN_RE.test(domain)) {
+    return 'domain je obavezan i mora biti ime domene.';
+  }
+
+  const { rows } = await client.query<{ id: string; name: string; timezone: string }>(
+    `SELECT nd.id, nd.name, a.timezone
+     FROM accounts a
+     LEFT JOIN network_devices nd ON nd.account_id = a.id AND nd.mac_address = $2
+     WHERE a.id = $1`,
+    [accountId, mac],
+  );
+
+  const row = rows[0];
+  const at = parseDate(event.at) ?? new Date().toISOString();
+
+  // "Dan" po vremenskoj zoni naloga, ne servera: blokada u 00:30 po
+  // Sarajevu je novi dan za roditelja, iako je po UTC-u još jučer.
+  const day = new Intl.DateTimeFormat('en-CA', {
+    timeZone: row?.timezone || 'Europe/Sarajevo',
+  }).format(new Date(at));
+
+  await recordThreatNotice(
+    client,
+    accountId,
+    row?.id ?? null,
+    mac,
+    row?.name || mac,
+    domain,
+    day,
+  );
 
   return null;
 }

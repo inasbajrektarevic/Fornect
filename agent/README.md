@@ -3,7 +3,7 @@
 Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 `https://admin.lukmandavran.cc/api/v1`. Samo standardna Python biblioteka.
 
-## Šta radi (v0.6)
+## Šta radi (v0.7)
 
 | Korak | Ruta | Status |
 |---|---|---|
@@ -20,6 +20,8 @@ Povezuje fizički Fornect uređaj (Orange Pi / R76S) s panelom na
 | Portal se sam otvara novom uređaju na WiFi-ju (captive detekcija na :80) | Pi-hole `dns.hosts` → uređaj | radi (v0.4) |
 | Pravo ime uređaja (iz DHCP zahtjeva koje uređaj pošalje pri spajanju, port 67, samo sluša) | `device.new` s imenom; backend ga upiše samo dok je ime još MAC | radi (v0.5) |
 | Primjena lista za filtriranje na Pi-hole (gravity.db + `pihole -g`) | `GET /devices/:id/config` → gravity.db | radi (v0.6) |
+| Zaštita od prevara: blokirana domena sa scam/phishing liste → obavijest roditelju (jedna po uređaju, domeni i danu) | `POST /devices/:id/events` (`threat.blocked`, migracija 023) | radi (v0.7) |
+| Profil v1/v2 (`FORNECT_PROFILE`, default v1): v1 ne diže captive portal ni MITM | — | radi (v0.6.1) |
 
 Token je u `/etc/fornect/agent.json` (0600, root). Nikad se ne ispisuje.
 Primljena konfiguracija: `/etc/fornect/config.json`.

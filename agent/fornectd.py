@@ -54,7 +54,7 @@ import time
 import urllib.error
 import urllib.request
 
-VERSION = "0.6.2"
+VERSION = "0.7.0"
 
 API_BASE = os.environ.get("FORNECT_API", "https://admin.lukmandavran.cc/api/v1").rstrip("/")
 STATE_DIR = os.environ.get("FORNECT_STATE_DIR", "/etc/fornect")
@@ -786,6 +786,178 @@ def apply_filter_lists(cfg: dict, state: dict) -> None:
     start_gravity_rebuild(set_id, len(urls))
 
 
+# ------------------------------------------- zaštita od prevara (V1)
+#
+# Pi-hole blokira domene sa svih lista, ali roditelju treba javiti samo
+# ono što je stvarno opasno: blokiranu reklamu ne, lažnu stranicu banke
+# da. Zato agent svakih ~60 s pročita NOVE blokirane upite iz Pi-hole
+# loga i za svaku domenu provjeri da li je u gravitaciji pogođena
+# listom prevara/phishinga. Samo takve idu u panel kao threat.blocked.
+#
+# Koja je lista "scam" čita se iz adrese adliste (phishing, scam,
+# threat-intel...). Reklamne liste (HaGeZi pro, popupads) ne prolaze.
+#
+# Jedna lažna stranica napravi desetine upita: šalje se najviše jedan
+# event po (uređaj, domena, dan); event_id to nosi u sebi, pa ga i
+# backend odbije kao duplikat ako ipak stigne dvaput.
+
+SCAM_LIST_MARKERS = (
+    "phishing", "scam", "fraud", "threat", "/tif", "tif.", "urlhaus",
+    "openphish", "malware", "badware", "spam404", "fake",
+)
+THREAT_SCAN_MAX_ROWS = 2000
+THREAT_MAX_EVENTS = 20
+# Ime domene iz DNS upita ide u SQL i u tekst za roditelja, pa prolazi
+# samo ono što je stvarno ime domene (bez navodnika, razmaka...).
+_DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9_](?:[a-z0-9_-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$")
+_threat_sent: set[str] = set()
+_threat_sent_day = ""
+
+
+def _sqlite_ro(db: str, sql: str) -> str | None:
+    return run(["pihole-FTL", "sqlite3", "-readonly", db, sql]) or run(
+        ["pihole-FTL", "sqlite3", db, sql]
+    )
+
+
+def scam_adlist_ids() -> list[int]:
+    """ID-jevi uključenih adlista koje su liste prevara/phishinga."""
+    out = _sqlite_ro(GRAVITY_DB, "SELECT id, lower(address) FROM adlist WHERE enabled=1;") or ""
+    ids = []
+    for line in out.splitlines():
+        try:
+            lid, addr = line.split("|", 1)
+        except ValueError:
+            continue
+        if any(m in addr for m in SCAM_LIST_MARKERS):
+            try:
+                ids.append(int(lid))
+            except ValueError:
+                pass
+    return ids
+
+
+def _gravity_candidates(domain: str) -> list[str]:
+    """Kako domena može stajati u gravitaciji: tačno ime, ili ABP
+    pravilo za nju ili neku od nadređenih domena (||primjer.com^)."""
+    parts = domain.split(".")
+    cands = [domain]
+    for i in range(len(parts) - 1):
+        cands.append("||" + ".".join(parts[i:]) + "^")
+    return cands
+
+
+def scam_domains(domains: set[str], list_ids: list[int]) -> set[str]:
+    """Od datih domena vrati one koje je blokirala neka scam lista."""
+    if not domains or not list_ids:
+        return set()
+    cand_to_domain: dict[str, set[str]] = {}
+    for d in domains:
+        for c in _gravity_candidates(d):
+            cand_to_domain.setdefault(c, set()).add(d)
+    vals = ",".join(f"'{c}'" for c in cand_to_domain)
+    ids = ",".join(str(i) for i in list_ids)
+    out = _sqlite_ro(
+        GRAVITY_DB,
+        f"SELECT DISTINCT domain FROM gravity WHERE adlist_id IN ({ids}) AND domain IN ({vals});",
+    ) or ""
+    hit: set[str] = set()
+    for line in out.splitlines():
+        hit |= cand_to_domain.get(line.strip(), set())
+    return hit
+
+
+def scan_threats(state: dict) -> dict:
+    """Pročita nove blokirane upite i pošalje threat.blocked za prevare."""
+    global _threat_sent_day
+    if not os.path.exists(PIHOLE_DB) or not os.path.exists(GRAVITY_DB):
+        return state
+
+    last = state.get("threat_last_query_id")
+    if last is None:
+        # Prvo pokretanje: ne šaljemo historiju, krećemo od sada.
+        top = _sqlite_ro(PIHOLE_DB, "SELECT coalesce(max(id),0) FROM queries;")
+        state["threat_last_query_id"] = int(top) if top and top.isdigit() else 0
+        save_state(state)
+        return state
+
+    out = _sqlite_ro(
+        PIHOLE_DB,
+        "SELECT id, timestamp, lower(domain), client FROM queries "
+        f"WHERE id > {int(last)} AND status IN ({BLOCKED_STATUSES}) "
+        f"ORDER BY id LIMIT {THREAT_SCAN_MAX_ROWS};",
+    )
+    if out is None:
+        return state
+
+    rows = []
+    max_id = int(last)
+    for line in out.splitlines():
+        cols = line.split("|")
+        if len(cols) < 4:
+            continue
+        try:
+            qid, ts = int(cols[0]), int(float(cols[1]))
+        except ValueError:
+            continue
+        max_id = max(max_id, qid)
+        domain = cols[2].strip().rstrip(".")
+        if _DOMAIN_RE.match(domain):
+            rows.append((ts, domain, cols[3].strip()))
+
+    # Kursor ide naprijed i kad nema prevara, da se isti redovi ne
+    # čitaju u krug.
+    if max_id != int(last):
+        state["threat_last_query_id"] = max_id
+        save_state(state)
+
+    if not rows:
+        return state
+
+    hits = scam_domains({d for _, d, _ in rows}, scam_adlist_ids())
+    if not hits:
+        return state
+
+    today = dt.date.today().isoformat()
+    if today != _threat_sent_day:
+        _threat_sent.clear()
+        _threat_sent_day = today
+
+    events = []
+    for ts, domain, ip in rows:
+        if domain not in hits:
+            continue
+        mac = ip_to_mac(ip)
+        if not mac:
+            continue  # bez MAC-a ne znamo čiji je uređaj
+        event_id = f"threat:{mac}:{domain}:{today}"
+        if event_id in _threat_sent:
+            continue
+        _threat_sent.add(event_id)
+        events.append({
+            "event_id": event_id,
+            "type": "threat.blocked",
+            "mac": mac,
+            "domain": domain,
+            "at": dt.datetime.fromtimestamp(ts, dt.timezone.utc).isoformat(timespec="seconds"),
+        })
+        if len(events) >= THREAT_MAX_EVENTS:
+            break
+
+    if events:
+        try:
+            send_events(events)
+            log(f"Prevare: {len(events)} zaustavljenih domena javljeno panelu "
+                f"({', '.join(e['domain'] for e in events[:3])}{'…' if len(events) > 3 else ''}).")
+        except ApiError as e:
+            if e.status != 409:
+                # Vrati ih u red za sljedeći krug.
+                for e2 in events:
+                    _threat_sent.discard(e2["event_id"])
+                raise
+    return state
+
+
 def portal_classify(mac: str, body: dict) -> tuple[int, dict]:
     target = body.get("state")
     with _portal_lock:
@@ -1288,6 +1460,10 @@ def main() -> int:
             heartbeat(state, dns)
             state = pull_config(state)
             retry_gravity_if_needed()
+            try:
+                state = scan_threats(state)
+            except (ApiError, OSError) as e:
+                log(f"Prevare: provjera nije uspjela ({e}), ponovo u sljedećem krugu.")
             try:
                 state = report_lan(state)
                 if not state.get("paired"):

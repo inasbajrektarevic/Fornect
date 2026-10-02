@@ -208,6 +208,13 @@
   color: #991b1b;
 }
 
+// Zaustavljena prevara: opasnost je bila stvarna, ali je zaustavljena.
+// Crveno-narandžasto kao upozorenje, ne kao greška uređaja.
+.notification-icon--threat {
+  background: #ffedd5;
+  color: #c2410c;
+}
+
 @media (max-width: 650px) {
   .topbar {
     padding: 22px 18px;
